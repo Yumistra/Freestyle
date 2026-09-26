@@ -1,8 +1,8 @@
-import { after, before, instead } from '@vendetta/patcher'
+import { instead } from '@vendetta/patcher'
 import { showToast } from '@vendetta/ui/toasts'
 import { deferInteraction } from './api'
 import { isBotSession, stripBot } from './auth'
-import { findByProps } from './modules'
+import { findByProps, findByStoreName } from './modules'
 import { buildReady, buildSupplemental, dmChannel, patchSelfUser, toUserGuild } from './ready'
 import { log, pushInteraction, rememberDm, saveSettings, settings, type Status } from './state'
 
@@ -57,8 +57,9 @@ function buildIdentify(d: any) {
 }
 
 function patchSend(target: any): () => void {
-    return instead('send', target, (args: any[], original: any) => {
-        if (!isBotSession()) return original.apply(target, args)
+    return instead('send', target, function (this: any, args: any[], original: any) {
+        const self = this
+        if (!isBotSession()) return original.apply(self, args)
         const [op, d] = args
         switch (op) {
             case 2:
@@ -80,14 +81,14 @@ function patchSend(target: any): () => void {
             case 8:
                 // 유저 클라이언트는 guild_id를 배열로 보내지만 봇은 서버 하나씩 요청
                 if (Array.isArray(d?.guild_id)) {
-                    for (const guild_id of d.guild_id) original.apply(target, [op, { ...d, guild_id }, ...args.slice(2)])
+                    for (const guild_id of d.guild_id) original.apply(self, [op, { ...d, guild_id }, ...args.slice(2)])
                     return
                 }
                 break
             default:
                 if (!BOT_OPS.has(op)) return
         }
-        return original.apply(target, args)
+        return original.apply(self, args)
     })
 }
 
@@ -174,8 +175,9 @@ function onInteraction(i: any) {
 }
 
 function patchHandleDispatch(target: any): () => void {
-    return instead('_handleDispatch', target, (args: any[], original: any) => {
-        if (!isBotSession()) return original.apply(target, args)
+    return instead('_handleDispatch', target, function (this: any, args: any[], original: any) {
+        const self = this
+        if (!isBotSession()) return original.apply(self, args)
         // (data, type, …) / (type, data, …) 어느 순서든 대응
         const ti = typeof args[0] === 'string' ? 0 : 1
         const di = ti === 0 ? 1 : 0
@@ -183,69 +185,67 @@ function patchHandleDispatch(target: any): () => void {
             const next = args.slice()
             next[ti] = t
             next[di] = d
-            return original.apply(target, next)
+            return original.apply(self, next)
         }
-        if (!handle(args[ti], args[di], forward)) return original.apply(target, args)
+        if (!handle(args[ti], args[di], forward)) return original.apply(self, args)
     })
 }
 
 function patchEmit(target: any): () => void {
-    return instead('emit', target, (args: any[], original: any) => {
-        if (args[0] !== 'dispatch' || !isBotSession()) return original.apply(target, args)
+    return instead('emit', target, function (this: any, args: any[], original: any) {
+        const self = this
+        if (args[0] !== 'dispatch' || !isBotSession()) return original.apply(self, args)
         const ti = typeof args[1] === 'string' ? 1 : 2
         const di = ti === 1 ? 2 : 1
         const forward: Forward = (t, d) => {
             const next = args.slice()
             next[ti] = t
             next[di] = d
-            return original.apply(target, next)
+            return original.apply(self, next)
         }
-        if (!handle(args[ti], args[di], forward)) return original.apply(target, args)
+        if (!handle(args[ti], args[di], forward)) return original.apply(self, args)
         return true
     })
 }
 
 export function installGateway(unpatches: Array<() => void>) {
-    // 소켓은 게이트웨이 연결 후 생기므로, 소켓 생성 지점을 후킹해 잡는다
-    const SocketModule = findByProps('OPCodeHandlers') ?? findByProps('_handleDispatch')
+    let stopped = false
+    let tries = 0
 
-    const grab = (s: any) => {
-        if (!s || s === socket) return
+    const attach = (s: any) => {
         socket = s
-        const proto = Object.getPrototypeOf(s) ?? s
-        if (typeof s.send === 'function') unpatches.push(patchSend(s))
+        const proto = Object.getPrototypeOf(s)
+        // 인스턴스에 직접 붙은 메서드면 인스턴스를, 아니면 프로토타입을 패치 (재연결 후에도 유지)
+        const owner = (key: string) => (Object.prototype.hasOwnProperty.call(s, key) ? s : proto)
+
+        if (typeof s.send === 'function') unpatches.push(patchSend(owner('send')))
         else log('error', '소켓 send()를 찾지 못함')
 
-        if (typeof s._handleDispatch === 'function') unpatches.push(patchHandleDispatch(proto._handleDispatch ? proto : s))
+        if (typeof s._handleDispatch === 'function') unpatches.push(patchHandleDispatch(owner('_handleDispatch')))
         else if (typeof s.emit === 'function') {
             unpatches.push(patchEmit(s))
             log('gateway', '_handleDispatch 없음 → emit("dispatch") 훅으로 대체')
         } else log('error', '디스패치 진입점을 찾지 못함')
+
+        log('gateway', `게이트웨이 소켓 연결됨 (봇 세션: ${isBotSession() ? '예' : '아니오'})`)
     }
 
-    // 1) 이미 연결돼 있으면 스토어에서 소켓을 꺼낸다
-    try {
-        const GatewayStore = findByProps('getSocket')
-        grab(GatewayStore?.getSocket?.())
-    } catch {}
-
-    // 2) 아직 없으면 소켓 클래스 생성자 후킹
-    if (!socket && SocketModule) {
-        const ctor = SocketModule.default ?? SocketModule
+    // 소켓이 늦게 생길 수 있으니 0.5초 간격으로 최대 30초 재시도
+    const tryGrab = () => {
+        if (stopped || socket) return
+        let s: any
         try {
-            unpatches.push(
-                after('connect', ctor?.prototype ?? ctor, function (this: any) {
-                    grab(this)
-                }),
-            )
-        } catch (e) {
-            log('error', `소켓 생성자 후킹 실패: ${String(e)}`)
-        }
+            s = findByStoreName('GatewayConnectionStore')?.getSocket?.()
+        } catch {}
+        if (s) return attach(s)
+        if (++tries > 60) return log('error', 'GatewayConnectionStore 소켓을 30초 동안 찾지 못함')
+        setTimeout(tryGrab, 500)
     }
-
-    if (!socket && !SocketModule) log('error', '게이트웨이 소켓 모듈을 찾지 못함 — 로그에서 재확인 필요')
+    tryGrab()
 
     unpatches.push(() => {
+        stopped = true
+        socket = undefined
         if (pending) clearTimeout(pending.timer)
         pending = null
     })
