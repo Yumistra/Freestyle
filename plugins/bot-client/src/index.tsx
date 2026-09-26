@@ -1,26 +1,22 @@
 import SettingsPage from './Settings'
-import { installGateway } from './gateway'
-import { installRest } from './rest'
-import { initStorage, log } from './state'
+import { isBotSession, logout } from './auth'
+import { initStorage } from './state'
 
-const unpatches: Array<() => void> = []
+// 안전 모드: 게이트웨이·REST 패치를 전혀 걸지 않는다.
+// 봇 세션이 남아 있으면 3초 뒤 로그아웃시켜 로그인 화면으로 돌려보낸다.
+let timer: ReturnType<typeof setTimeout> | undefined
 
 export default {
     onLoad() {
         initStorage()
-        try {
-            installRest(unpatches)
-            installGateway(unpatches)
-        } catch (e) {
-            log('error', `로드 실패: ${(e as Error)?.stack ?? e}`)
-        }
+        timer = setTimeout(() => {
+            try {
+                if (isBotSession()) logout()
+            } catch {}
+        }, 3000)
     },
     onUnload() {
-        for (const u of unpatches.splice(0)) {
-            try {
-                u()
-            } catch {}
-        }
+        if (timer) clearTimeout(timer)
     },
     settings: SettingsPage,
 }
