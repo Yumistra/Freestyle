@@ -29,7 +29,9 @@ export function patchSelfUser(u: any) {
         ...u,
         // email이 null이면 "계정 인증 필요" 배너·전송 제한이 걸릴 수 있어 빈 문자열로 둔다
         email: u?.email ?? '',
-        bot: true,
+        // 디스코드는 READY의 사용자가 bot이면 정상 진행 대신 로그아웃 분기로 빠진다 (DBC도 이 검사를 뒤집는다).
+        // 오류 없이 로딩에서 멈추던 원인이므로 자기 자신은 bot=false로 넘긴다
+        bot: false,
     }
 }
 
