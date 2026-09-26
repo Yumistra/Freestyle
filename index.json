@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "name": "My Plugin Repository",
+  "description": "Example plugin repository from the Revenge plugin template.",
+  "plugins": {
+    "io.github.yumistra.bot-client": {
+      "name": "Bot Client",
+      "description": "봇 토큰으로 Discord에 로그인하고, 내장 API 콘솔로 봇 API를 직접 호출합니다.",
+      "author": "Yumistra",
+      "icon": "WrenchIcon",
+      "channels": {
+        "latest": "0.1.0"
+      },
+      "versions": {
+        "0.1.0": {
+          "url": "https://yumistra.github.io/Freestyle/pool/io.github.yumistra.bot-client@0.1.0.zip",
+          "sha256": "02a6afdcab8ec31043f05b2c0790729146c664ddec33d45f752f219f5f37d095",
+          "size": 424,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      }
+    }
+  }
+}
