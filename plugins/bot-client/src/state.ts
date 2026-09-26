@@ -1,4 +1,5 @@
 import { storage } from '@vendetta/plugin'
+import { showToast } from '@vendetta/ui/toasts'
 import { DEFAULT_INTENTS } from './intents'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'invisible'
@@ -81,6 +82,12 @@ export function log(kind: LogKind, msg: string) {
     logs.unshift({ t: Date.now(), kind, msg })
     if (logs.length > 100) logs.length = 100
     if (kind === 'error') console.error('[BotClient]', msg)
+    // 화면이 로딩에서 멈춰도 어디까지 진행됐는지 보이도록 게이트웨이 단계·오류는 토스트로 표시
+    if (kind === 'gateway' || kind === 'error') {
+        try {
+            showToast(`[BotClient] ${msg}`)
+        } catch {}
+    }
     notify()
 }
 
