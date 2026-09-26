@@ -19,6 +19,59 @@ let watchdog: ReturnType<typeof setTimeout> | undefined
 let unsubscribe: (() => void) | undefined
 let done = false
 
+// ── 조용한 실패 진단: 연결 완료 전까지 콘솔 오류·전역 오류를 잡아 둔다 ──
+// React Native는 async 안에서 난 오류를 "Possible Unhandled Promise Rejection" 경고로만 남기므로 warn도 본다
+let lastCaught = ''
+let restoreCapture: (() => void) | undefined
+
+function describe(args: any[]) {
+    return args
+        .map(a => (a instanceof Error ? `${a.message} @ ${String(a.stack ?? '').split('\n').slice(1, 3).join(' | ')}` : typeof a === 'string' ? a : (() => { try { return JSON.stringify(a) } catch { return String(a) } })()))
+        .join(' ')
+        .slice(0, 400)
+}
+
+function startCapture() {
+    if (restoreCapture) return
+    const c = console as any
+    const origError = c.error
+    const origWarn = c.warn
+    const record = (level: string, args: any[]) => {
+        if (done) return
+        const msg = describe(args)
+        if (!msg || msg.includes('[BotClient]')) return
+        if (level === 'warn' && !/error|exception|reject|undefined|null|cannot|failed/i.test(msg)) return
+        lastCaught = `${level}: ${msg}`
+        log('error', `잡힌 ${lastCaught}`)
+    }
+    c.error = function (...args: any[]) {
+        record('error', args)
+        return origError.apply(this, args)
+    }
+    c.warn = function (...args: any[]) {
+        record('warn', args)
+        return origWarn.apply(this, args)
+    }
+    const EU = (globalThis as any).ErrorUtils
+    const origHandler = EU?.getGlobalHandler?.()
+    if (EU?.setGlobalHandler && origHandler) {
+        EU.setGlobalHandler((err: any, fatal: boolean) => {
+            record('error', [err])
+            return origHandler(err, fatal)
+        })
+    }
+    restoreCapture = () => {
+        c.error = origError
+        c.warn = origWarn
+        if (EU?.setGlobalHandler && origHandler) EU.setGlobalHandler(origHandler)
+        restoreCapture = undefined
+    }
+}
+
+function stopCapture() {
+    restoreCapture?.()
+}
+
 function recordError(msg: string) {
     saveSettings({ lastError: msg, lastErrorAt: Date.now() })
     log('error', msg)
@@ -26,6 +79,8 @@ function recordError(msg: string) {
 
 /** 봇 모드를 끄고, 봇 세션이면 로그아웃한다 (앱을 로그인 화면으로 되돌리는 복구 동작) */
 export function bailOut(reason: string, delayMs = 0) {
+    stopCapture()
+    if (lastCaught) reason = `${reason} — 직전 오류: ${lastCaught}`
     saveSettings({ enabled: false, bootArmed: false })
     recordError(reason)
     try {
@@ -66,6 +121,7 @@ export function shouldPatch(): boolean {
 function onConnectionOpen() {
     if (done) return
     done = true
+    stopCapture()
     if (watchdog) clearTimeout(watchdog)
     watchdog = undefined
     saveSettings({ bootArmed: false, failCount: 0 })
@@ -75,6 +131,8 @@ function onConnectionOpen() {
 /** 패치를 건 직후 호출: 이번 부팅을 armed로 기록하고 워치독 시작 */
 export function arm() {
     done = false
+    lastCaught = ''
+    startCapture()
     saveSettings({ bootArmed: true })
 
     if (!unsubscribe) {
@@ -96,6 +154,7 @@ export function arm() {
 }
 
 export function disposeGuard() {
+    stopCapture()
     if (watchdog) clearTimeout(watchdog)
     watchdog = undefined
     unsubscribe?.()
