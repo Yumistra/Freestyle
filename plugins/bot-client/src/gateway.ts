@@ -1,4 +1,4 @@
-import { instead } from '@vendetta/patcher'
+import { before, instead } from '@vendetta/patcher'
 import { showToast } from '@vendetta/ui/toasts'
 import { deferInteraction } from './api'
 import { isBotSession, stripBot } from './auth'
@@ -226,6 +226,28 @@ export function installGateway(unpatches: Array<() => void>) {
             unpatches.push(patchEmit(s))
             log('gateway', '_handleDispatch 없음 → emit("dispatch") 훅으로 대체')
         } else log('error', '디스패치 진입점을 찾지 못함')
+
+        // 디스코드가 디스패치 처리 중 예외가 나면 소켓을 리셋하고 재접속한다. 그 예외와 종료 코드를 보이게 한다
+        if (typeof s.resetSocketOnError === 'function') {
+            unpatches.push(
+                before('resetSocketOnError', owner('resetSocketOnError'), (args: any[]) => {
+                    if (!isBotSession()) return
+                    const info = args[0] ?? {}
+                    const err = info.error ?? info
+                    const where = String(err?.stack ?? '').split('\n').slice(1, 3).join(' | ').trim()
+                    log('error', `소켓 리셋 (${info.action ?? '?'}): ${err?.message ?? String(err)}${where ? ` @ ${where}` : ''}`)
+                }),
+            )
+        }
+        if (typeof s._handleClose === 'function') {
+            unpatches.push(
+                before('_handleClose', owner('_handleClose'), (args: any[]) => {
+                    if (!isBotSession()) return
+                    const [, code, reason] = args
+                    log('error', `게이트웨이 종료 code=${code ?? '?'} ${reason ?? ''}`)
+                }),
+            )
+        }
 
         log('gateway', `게이트웨이 소켓 연결됨 (봇 세션: ${isBotSession() ? '예' : '아니오'})`)
     }
