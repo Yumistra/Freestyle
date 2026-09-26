@@ -108,6 +108,8 @@ export function buildReady(raw: any, loaded: Map<string, any>, dms: DmEntry[]) {
         read_state: { version: 0, partial: false, entries: [] },
         user_guild_settings: { version: 0, partial: false, entries: [] },
         user_settings: {},
+        // 클라이언트는 이 값을 base64 protobuf로 디코딩한다. 없으면 undefined 디코딩에서 예외가 나므로 빈 값(=기본 설정)을 준다
+        user_settings_proto: '',
         notification_settings: { flags: 0 },
         consents: { personalization: { consented: false } },
         tutorial: null,
