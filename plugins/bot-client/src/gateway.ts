@@ -9,7 +9,10 @@ import { log, pushInteraction, rememberDm, saveSettings, settings, type Status }
 type Forward = (type: string, data: any) => unknown
 
 // 봇이 보낼 수 있는 opcode만 통과. 14·36·37 같은 유저 전용 opcode를 보내면 서버가 연결을 끊는다.
-const BOT_OPS = new Set([1, 2, 3, 4, 6, 8, 31])
+// 1 = Heartbeat, 40 = QoS Heartbeat (봇은 qos가 null일 때만 허용, 아니면 4002로 끊고 재접속 루프에 빠진다)
+const HEARTBEAT = 1
+const QOS_HEARTBEAT = 40
+const BOT_OPS = new Set([HEARTBEAT, 2, 3, 4, 6, 8, 31, QOS_HEARTBEAT])
 
 interface Pending {
     raw: any
@@ -52,6 +55,7 @@ function buildIdentify(d: any) {
         properties: { os: 'Android', browser: 'Discord Android', device: 'Discord Android' },
         compress: d?.compress === true,
         large_threshold: 250,
+        shard: [0, 1],
         presence: buildPresence({ status: s.status }),
     }
 }
@@ -84,6 +88,10 @@ function patchSend(target: any): () => void {
                     for (const guild_id of d.guild_id) original.apply(self, [op, { ...d, guild_id }, ...args.slice(2)])
                     return
                 }
+                break
+            case QOS_HEARTBEAT:
+                // 봇 게이트웨이는 qos가 객체면 4002로 끊는다. seq는 두고 qos만 null로.
+                if (d && typeof d === 'object') args[1] = { ...d, qos: null }
                 break
             default:
                 if (!BOT_OPS.has(op)) return
