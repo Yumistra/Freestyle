@@ -249,6 +249,13 @@ function AdvancedSection({ s }: { s: S }) {
     return (
         <FormSection title="고급">
             <FormSwitchRow
+                label="멈추면 자동 새로고침"
+                subLabel="봇으로 켰는데 10초 안에 로딩이 끝나지 않으면 앱을 다시 불러옵니다 (2분에 한 번까지)"
+                value={s.autoReload}
+                onValueChange={(autoReload: boolean) => saveSettings({ autoReload })}
+            />
+            <FormDivider />
+            <FormSwitchRow
                 label="인터랙션 자동 defer"
                 subLabel="3초 제한 때문에 끄면 명령이 '응답 없음'으로 실패합니다"
                 value={s.autoDefer}
