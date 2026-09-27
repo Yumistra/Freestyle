@@ -1,4 +1,5 @@
 import { FluxDispatcher, ReactNative } from '@vendetta/metro/common'
+import { after } from '@vendetta/patcher'
 import { showToast } from '@vendetta/ui/toasts'
 import { isBotSession, logout } from './auth'
 import { log, MAX_FAILS, saveSettings, settings } from './state'
@@ -206,4 +207,40 @@ export function disposeGuard() {
     watchdog = undefined
     unsubscribe?.()
     unsubscribe = undefined
+}
+
+/**
+ * 스와이프로 앱을 닫으면 안드로이드가 JS는 살려두고 화면만 없앤다. 다시 열면 화면만 새로 붙으면서
+ * (AppRegistry.runApplication 재호출) 봇 세션이 로딩에서 멈춘다. 강제 종료 후 재실행이 되는 이유는 JS가
+ * 처음부터 다시 시작되기 때문이므로, 백그라운드 이후 화면이 다시 만들어지면 JS를 새로 불러온다.
+ *  - 콜드 스타트의 첫 runApplication은 백그라운드 전에 일어나므로 새로고침하지 않는다
+ *  - 홈 버튼으로 나갔다 돌아오는 건 runApplication이 다시 불리지 않아 영향 없다
+ */
+export function installRelaunchReload(unpatches: Array<() => void>) {
+    const RN = ReactNative as any
+    const AppRegistry = RN?.AppRegistry
+    const AppState = RN?.AppState
+    if (typeof AppRegistry?.runApplication !== 'function' || typeof AppState?.addEventListener !== 'function') {
+        log('error', '앱 재실행 감지 불가 (AppRegistry/AppState 없음)')
+        return
+    }
+
+    let sawBackground = false
+    const sub = AppState.addEventListener('change', (state: string) => {
+        if (state === 'background') sawBackground = true
+    })
+    unpatches.push(() => sub?.remove?.())
+
+    unpatches.push(
+        after('runApplication', AppRegistry, () => {
+            if (!sawBackground) return
+            sawBackground = false
+            const s = settings()
+            if (!s.autoReload || !s.enabled || !isBotSession()) return
+            log('gateway', '앱을 다시 열어서 새로 불러옵니다 (무한 로딩 방지)')
+            setTimeout(() => {
+                if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 강제 종료 후 다시 켜주세요')
+            }, 300)
+        }),
+    )
 }
