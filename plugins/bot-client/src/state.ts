@@ -34,6 +34,8 @@ export interface Settings {
     bootArmed: boolean // 이번 부팅에서 패치를 걸었고 아직 READY 확인 전이면 true
     lastError: string // 마지막 실패 원인 (설정 화면 표시용)
     lastErrorAt: number
+    autoReload: boolean // 봇 접속 후 로딩이 멈추면 앱을 자동으로 다시 불러올지
+    lastAutoReloadAt: number // 새로고침 무한 반복 방지용
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -51,6 +53,8 @@ export const DEFAULT_SETTINGS: Settings = {
     bootArmed: false,
     lastError: '',
     lastErrorAt: 0,
+    autoReload: true,
+    lastAutoReloadAt: 0,
 }
 
 // 연속 이 횟수만큼 실패하면 자동으로 봇 패치를 끈다
