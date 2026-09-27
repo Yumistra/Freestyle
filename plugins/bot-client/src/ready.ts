@@ -46,7 +46,8 @@ export function toUserGuild(g: any, selfId?: string) {
     if (!g || g.unavailable) return g
     const properties: Record<string, unknown> = {}
     for (const k in g) if (!LIST_KEYS.has(k)) properties[k] = g[k]
-    const members: any[] = g.members ?? []
+    // STARTED_ONBOARDING(1<<3)가 켜진 채면 커뮤니티 서버에서 온보딩 중으로 보고 기본 채널 외를 숨긴다 (DBC도 무력화)
+    const members: any[] = (g.members ?? []).map((m: any) => (m?.user?.id === selfId && m.flags & 8 ? { ...m, flags: m.flags & ~8 } : m))
     const self = members.find(m => m?.user?.id === selfId)
     return {
         ...g,
