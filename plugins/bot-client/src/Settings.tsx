@@ -250,7 +250,7 @@ function AdvancedSection({ s }: { s: S }) {
         <FormSection title="고급">
             <FormSwitchRow
                 label="멈추면 자동 새로고침"
-                subLabel="봇으로 켰는데 10초 안에 로딩이 끝나지 않으면 앱을 다시 불러옵니다 (2분에 한 번까지)"
+                subLabel="봇으로 켰는데 10초 안에 로딩이 끝나지 않거나, 앱을 닫았다 다시 열면 앱을 새로 불러옵니다"
                 value={s.autoReload}
                 onValueChange={(autoReload: boolean) => saveSettings({ autoReload })}
             />
