@@ -1,4 +1,4 @@
-import { FluxDispatcher } from '@vendetta/metro/common'
+import { FluxDispatcher, ReactNative } from '@vendetta/metro/common'
 import { showToast } from '@vendetta/ui/toasts'
 import { isBotSession, logout } from './auth'
 import { log, MAX_FAILS, saveSettings, settings } from './state'
@@ -15,7 +15,12 @@ import { log, MAX_FAILS, saveSettings, settings } from './state'
  */
 
 const WATCHDOG_EXTRA_MS = 15000
+// 봇으로 켰는데 이 시간 안에 연결이 끝나지 않으면 앱을 한 번 다시 불러온다 (강제 중지 후 재실행과 같은 효과)
+const STALL_RELOAD_MS = 10000
+// 새로고침 뒤에도 또 멈추면 이 시간 안에는 다시 새로고침하지 않고 워치독에 맡긴다 (무한 새로고침 방지)
+const RELOAD_COOLDOWN_MS = 120000
 let watchdog: ReturnType<typeof setTimeout> | undefined
+let stallTimer: ReturnType<typeof setTimeout> | undefined
 let unsubscribe: (() => void) | undefined
 let done = false
 
@@ -93,6 +98,41 @@ export function bailOut(reason: string, delayMs = 0) {
     }, delayMs)
 }
 
+/** 디스코드 JS 번들을 다시 불러온다 (Revenge 오류 화면의 "Reload Discord"와 같은 기능) */
+function reloadApp(): boolean {
+    const RN = ReactNative as any
+    const candidates = [
+        (globalThis as any).nativeModuleProxy?.BundleUpdaterManager,
+        RN?.NativeModules?.BundleUpdaterManager,
+        RN?.NativeModules?.RTNBundleUpdaterManager,
+        RN?.TurboModuleRegistry?.get?.('NativeBundleUpdaterManager'),
+        RN?.TurboModuleRegistry?.get?.('BundleUpdaterManager'),
+    ]
+    for (const m of candidates) {
+        if (typeof m?.reload === 'function') {
+            m.reload()
+            return true
+        }
+    }
+    return false
+}
+
+function checkStall() {
+    stallTimer = undefined
+    const s = settings()
+    if (done || !s.autoReload || !isBotSession()) return
+    if (Date.now() - s.lastAutoReloadAt < RELOAD_COOLDOWN_MS) {
+        log('error', '방금 새로고침했는데도 로딩이 멈춤 — 안전장치에 맡깁니다')
+        return
+    }
+    // 의도한 새로고침이라 실패로 세지 않도록 armed를 풀고 기록해 둔다
+    saveSettings({ lastAutoReloadAt: Date.now(), bootArmed: false })
+    log('gateway', '로딩이 멈춰서 앱을 자동으로 다시 불러옵니다')
+    setTimeout(() => {
+        if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 직접 다시 켜주세요')
+    }, 500)
+}
+
 /** onLoad에서 호출. 이번 부팅에 봇 패치를 걸어도 되는지 판단 */
 export function shouldPatch(): boolean {
     const s = settings()
@@ -122,6 +162,8 @@ function onConnectionOpen() {
     if (done) return
     done = true
     stopCapture()
+    if (stallTimer) clearTimeout(stallTimer)
+    stallTimer = undefined
     if (watchdog) clearTimeout(watchdog)
     watchdog = undefined
     saveSettings({ bootArmed: false, failCount: 0 })
@@ -145,6 +187,9 @@ export function arm() {
         }
     }
 
+    if (stallTimer) clearTimeout(stallTimer)
+    stallTimer = setTimeout(checkStall, STALL_RELOAD_MS)
+
     if (watchdog) clearTimeout(watchdog)
     const ms = settings().readyTimeoutMs + WATCHDOG_EXTRA_MS
     watchdog = setTimeout(() => {
@@ -155,6 +200,8 @@ export function arm() {
 
 export function disposeGuard() {
     stopCapture()
+    if (stallTimer) clearTimeout(stallTimer)
+    stallTimer = undefined
     if (watchdog) clearTimeout(watchdog)
     watchdog = undefined
     unsubscribe?.()
