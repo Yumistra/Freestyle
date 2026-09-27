@@ -25,6 +25,9 @@ interface Pending {
 
 let socket: any
 let selfId: string | undefined
+// 이번 연결의 IDENTIFY가 우리 패치를 거쳤는지 (앱 시작 경합 감지용)
+let identifyPatched = false
+const RESYNC_ACTION = 'bot_client_resync'
 let pending: Pending | null = null
 
 // ── 송신 ──────────────────────────────────────────────────────────────
@@ -67,6 +70,7 @@ function patchSend(target: any): () => void {
         const [op, d] = args
         switch (op) {
             case 2:
+                identifyPatched = true
                 args[1] = buildIdentify(d)
                 log('gateway', `IDENTIFY 변환 (intents=${args[1].intents})`)
                 break
@@ -241,6 +245,7 @@ export function installGateway(unpatches: Array<() => void>) {
                 before('resetSocketOnError', owner('resetSocketOnError'), (args: any[]) => {
                     if (!isBotSession()) return
                     const info = args[0] ?? {}
+                    if (info.action === RESYNC_ACTION) return
                     const err = info.error ?? info
                     const where = String(err?.stack ?? '').split('\n').slice(1, 3).join(' | ').trim()
                     const msg = `소켓 리셋 (${info.action ?? '?'}): ${err?.message ?? String(err)}${where ? ` @ ${where}` : ''}`
@@ -252,8 +257,17 @@ export function installGateway(unpatches: Array<() => void>) {
         if (typeof s._handleClose === 'function') {
             unpatches.push(
                 before('_handleClose', owner('_handleClose'), (args: any[]) => {
+                    const wasPatched = identifyPatched
+                    identifyPatched = false // 다음 연결은 다시 IDENTIFY 변환을 거쳐야 한다
                     if (!isBotSession()) return
                     const [, code, reason] = args
+                    // 앱 시작 경합: 플러그인이 뜨기 전 "Bot xxx" 토큰이 그대로 나가 인증 실패(4004)가 나면
+                    // 디스코드가 로그아웃해 버린다. 이 경우만 일반 오류(4000)로 바꿔 재접속시키면 이번엔 변환된 IDENTIFY가 나간다
+                    if (code === 4004 && !wasPatched) {
+                        args[1] = 4000
+                        log('gateway', '플러그인 로드 전 접속이 거절됨(4004) → 로그아웃 대신 재접속')
+                        return args
+                    }
                     const msg = `게이트웨이 종료 code=${code ?? '?'} ${reason ?? ''}`
                     if (code && code !== 1000) saveSettings({ lastError: msg, lastErrorAt: Date.now() })
                     log('error', msg)
@@ -262,6 +276,23 @@ export function installGateway(unpatches: Array<() => void>) {
         }
 
         log('gateway', `게이트웨이 소켓 연결됨 (봇 세션: ${isBotSession() ? '예' : '아니오'})`)
+
+        // 앱 시작 경합: 플러그인이 뜨기 전에 이미 접속(IDENTIFY/READY)이 진행됐다면, 변환 안 된 데이터로
+        // 로딩에서 멈춘다. 한 번 강제로 재접속시켜 IDENTIFY·READY가 모두 우리 패치를 거치게 한다
+        const live = s.sessionId != null || s.webSocket != null || s._ws != null || s.connectionState === 'CONNECTED' || s.connectionState === 'SESSION_ESTABLISHED'
+        if (isBotSession() && live && !identifyPatched) {
+            setTimeout(() => {
+                if (identifyPatched) return
+                try {
+                    if (typeof s.resetSocketOnError === 'function') {
+                        log('gateway', '플러그인 로드 전에 이미 접속됨 → 한 번 재접속')
+                        s.resetSocketOnError({ error: new Error('BotClient resync'), action: RESYNC_ACTION, metricAction: RESYNC_ACTION })
+                    } else log('error', '재접속 함수(resetSocketOnError)를 찾지 못함 — 앱을 다시 켜보세요')
+                } catch (e) {
+                    log('error', `재접속 실패: ${String(e)}`)
+                }
+            }, 0)
+        }
     }
 
     // 소켓이 늦게 생길 수 있으니 0.5초 간격으로 최대 30초 재시도
