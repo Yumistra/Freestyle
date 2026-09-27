@@ -26,7 +26,11 @@ export function patchSelfUser(u: any) {
         phone: null,
         mobile: true,
         desktop: false,
+        premium_usage_flags: 0,
         ...u,
+        // 설정 화면의 hasTOTPEnabled가 authenticator_types.includes()를 부른다. 봇에는 이 필드가 없어 크래시 → 빈 목록
+        authenticator_types: Array.isArray(u?.authenticator_types) ? u.authenticator_types : [],
+        linked_users: Array.isArray(u?.linked_users) ? u.linked_users : [],
         // email이 null이면 "계정 인증 필요" 배너·전송 제한이 걸릴 수 있어 빈 문자열로 둔다
         email: u?.email ?? '',
         // 디스코드는 READY의 사용자가 bot이면 정상 진행 대신 로그아웃 분기로 빠진다 (DBC도 이 검사를 뒤집는다).
