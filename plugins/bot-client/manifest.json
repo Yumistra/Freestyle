@@ -1,9 +1,0 @@
-{
-    "name": "Bot Client",
-    "description": "봇 토큰으로 Discord에 로그인하고, 내장 API 콘솔로 봇 API를 직접 호출합니다.",
-    "authors": [{ "name": "Yumistra", "id": "0" }],
-    "main": "src/index.tsx",
-    "vendetta": {
-        "icon": "WrenchIcon"
-    }
-}

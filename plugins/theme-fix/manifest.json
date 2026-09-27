@@ -1,9 +1,0 @@
-{
-    "name": "Theme Keeper",
-    "description": "계정을 바꾸면 앱을 다시 불러와 풀린 커스텀 테마를 다시 적용합니다.",
-    "authors": [{ "name": "Yumistra", "id": "0" }],
-    "main": "src/index.ts",
-    "vendetta": {
-        "icon": "ic_theme_24px"
-    }
-}
