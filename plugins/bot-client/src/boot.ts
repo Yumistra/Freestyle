@@ -1,6 +1,6 @@
 import { installUserFixes } from './fixes'
 import { installGateway } from './gateway'
-import { arm, disposeGuard } from './guard'
+import { arm, disposeGuard, installRelaunchReload } from './guard'
 import { installRest } from './rest'
 import { log } from './state'
 
@@ -13,6 +13,7 @@ export function activate() {
         installRest(unpatches)
         installGateway(unpatches)
         installUserFixes(unpatches)
+        installRelaunchReload(unpatches)
         active = true
         log('info', '봇 패치 적용')
     }
