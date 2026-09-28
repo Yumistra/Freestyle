@@ -1,6 +1,5 @@
 import { FluxDispatcher, ReactNative } from '@vendetta/metro/common'
 import { after } from '@vendetta/patcher'
-import { showToast } from '@vendetta/ui/toasts'
 import { isBotSession, logout } from './auth'
 import { log, MAX_FAILS, saveSettings, settings } from './state'
 
@@ -30,11 +29,20 @@ let done = false
 let lastCaught = ''
 let restoreCapture: (() => void) | undefined
 
-function describe(args: any[]) {
-    return args
-        .map(a => (a instanceof Error ? `${a.message} @ ${String(a.stack ?? '').split('\n').slice(1, 3).join(' | ')}` : typeof a === 'string' ? a : (() => { try { return JSON.stringify(a) } catch { return String(a) } })()))
-        .join(' ')
-        .slice(0, 400)
+// 부팅 중 디스코드가 찍는 로그는 매우 많다. 객체를 통째로 JSON.stringify하면 시작이 버벅이므로
+// 문자열과 Error만 보고, 길이를 먼저 자른다
+const INTERESTING = /error|exception|reject|undefined|null|cannot|failed/i
+function describe(args: any[]): string {
+    let out = ''
+    for (const a of args) {
+        let piece: string
+        if (typeof a === 'string') piece = a
+        else if (a instanceof Error) piece = `${a.message} @ ${String(a.stack ?? '').split('\n', 3).slice(1).join(' | ')}`
+        else continue
+        out += (out ? ' ' : '') + piece.slice(0, 300)
+        if (out.length >= 400) break
+    }
+    return out.slice(0, 400)
 }
 
 function startCapture() {
@@ -46,7 +54,7 @@ function startCapture() {
         if (done) return
         const msg = describe(args)
         if (!msg || msg.includes('[BotClient]')) return
-        if (level === 'warn' && !/error|exception|reject|undefined|null|cannot|failed/i.test(msg)) return
+        if (level === 'warn' && !INTERESTING.test(msg)) return
         lastCaught = `${level}: ${msg}`
         log('error', `잡힌 ${lastCaught}`)
     }
@@ -85,13 +93,13 @@ function recordError(msg: string) {
 
 /** 봇 모드를 끄고, 봇 세션이면 로그아웃한다 (앱을 로그인 화면으로 되돌리는 복구 동작) */
 export function bailOut(reason: string, delayMs = 0) {
+    try {
+        ;(globalThis as any).__botClientReady = false
+    } catch {}
     stopCapture()
     if (lastCaught) reason = `${reason} — 직전 오류: ${lastCaught}`
     saveSettings({ enabled: false, bootArmed: false })
     recordError(reason)
-    try {
-        showToast(`[BotClient] ${reason}`)
-    } catch {}
     setTimeout(() => {
         try {
             if (isBotSession()) logout()
@@ -168,6 +176,10 @@ function onConnectionOpen() {
     if (watchdog) clearTimeout(watchdog)
     watchdog = undefined
     saveSettings({ bootArmed: false, failCount: 0 })
+    // 다른 플러그인(theme-fix)이 "봇 로그인이 끝나 새로고침해도 안전"을 알 수 있게 전역 플래그로 알린다
+    try {
+        ;(globalThis as any).__botClientReady = isBotSession()
+    } catch {}
     log('gateway', '정상 연결 확인 — 안전장치 해제')
 }
 

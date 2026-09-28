@@ -1,4 +1,4 @@
-import { SelectedChannelStore } from './modules'
+import { getSelectedChannelStore } from './modules'
 import { log, settings } from './state'
 
 export const API_BASE = 'https://discord.com/api/v10'
@@ -44,7 +44,7 @@ export async function validateBotToken(token: string) {
 export function fillPlaceholders(path: string) {
     let channel = ''
     try {
-        channel = SelectedChannelStore?.getChannelId?.() ?? ''
+        channel = getSelectedChannelStore()?.getChannelId?.() ?? ''
     } catch {}
     return path.replace(/\{channel\}/g, channel).replace(/\{app\}/g, settings().appId)
 }

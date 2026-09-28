@@ -1,5 +1,4 @@
 import { storage } from '@vendetta/plugin'
-import { showToast } from '@vendetta/ui/toasts'
 import { DEFAULT_INTENTS } from './intents'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'invisible'
@@ -62,6 +61,10 @@ export const MAX_FAILS = 2
 
 const store = storage as Partial<Settings>
 
+// 설정 스냅샷 캐시: settings()가 REST 요청·게이트웨이 이벤트마다 불리는데, 매번 저장소 프록시를
+// 통째로 펼쳐 복사하면 비싸다. 저장은 전부 saveSettings를 거치므로 그때만 스냅샷을 갱신한다.
+let snapshot: Settings | undefined
+
 /** storage에 기본값을 한 번 채워 넣는다 (Vendetta storage는 프록시라 직접 대입 가능) */
 export function initStorage() {
     for (const k in DEFAULT_SETTINGS) {
@@ -69,14 +72,24 @@ export function initStorage() {
             ;(store as any)[k] = (DEFAULT_SETTINGS as any)[k]
         }
     }
+    snapshot = { ...DEFAULT_SETTINGS, ...store }
 }
 
 export function settings(): Settings {
-    return { ...DEFAULT_SETTINGS, ...store }
+    return snapshot ?? (snapshot = { ...DEFAULT_SETTINGS, ...store })
 }
 
+/** 바뀐 값만 저장한다. 저장소는 키 하나를 쓸 때마다 디스크에 기록하므로 같은 값 재저장을 건너뛴다 */
 export function saveSettings(patch: Partial<Settings>) {
-    Object.assign(store, patch)
+    const cur = settings()
+    let changed = false
+    for (const k in patch) {
+        const v = (patch as any)[k]
+        if (typeof v !== 'object' && Object.is((cur as any)[k], v)) continue
+        ;(store as any)[k] = v
+        changed = true
+    }
+    if (changed) snapshot = { ...cur, ...patch }
 }
 
 // ── 로그 / 인터랙션 버퍼 (설정 화면에서 표시) ──────────────────────────
@@ -92,20 +105,21 @@ const logs: LogEntry[] = []
 const interactions: any[] = []
 const listeners = new Set<() => void>()
 
+// 설정 화면 갱신은 모아서 한 번에: 로그가 연달아 찍혀도 화면을 매번 다시 그리지 않는다
+let notifyTimer: ReturnType<typeof setTimeout> | undefined
 function notify() {
-    for (const fn of listeners) fn()
+    if (notifyTimer || !listeners.size) return
+    notifyTimer = setTimeout(() => {
+        notifyTimer = undefined
+        for (const fn of listeners) fn()
+    }, 150)
 }
 
 export function log(kind: LogKind, msg: string) {
     logs.unshift({ t: Date.now(), kind, msg })
     if (logs.length > 100) logs.length = 100
     if (kind === 'error') console.error('[BotClient]', msg)
-    // 화면이 로딩에서 멈춰도 어디까지 진행됐는지 보이도록 게이트웨이 단계·오류는 토스트로 표시
-    if (kind === 'gateway' || kind === 'error') {
-        try {
-            showToast(`[BotClient] ${msg}`)
-        } catch {}
-    }
+    // 자동 동작 알림은 화면에 띄우지 않고 로그에만 남긴다 (설정 → 로그에서 확인)
     notify()
 }
 

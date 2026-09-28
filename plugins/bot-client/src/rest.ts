@@ -1,6 +1,6 @@
 import { instead } from '@vendetta/patcher'
 import { isBotSession } from './auth'
-import { ChannelStore, findByProps } from './modules'
+import { findByProps, getChannelStore } from './modules'
 import { log, settings } from './state'
 
 interface RuleCtx {
@@ -75,7 +75,7 @@ async function forumSearch({ match, opts, get }: RuleCtx) {
     const q = opts?.query ?? {}
     let guildId: string | undefined
     try {
-        const ch = ChannelStore?.getChannel?.(channelId)
+        const ch = getChannelStore()?.getChannel?.(channelId)
         guildId = ch?.guild_id ?? ch?.getGuildId?.()
     } catch {}
 
@@ -150,19 +150,22 @@ const RULES: Array<[method: string, pattern: RegExp, handler: Handler]> = [
     ['POST', /^\/channels\/(\d+)\/post-data$/, forumPostData],
 ]
 
-let extraCache = { src: '', list: [] as RegExp[] }
+// 추가 차단 경로: 설정이 바뀔 때만(배열이 새로 저장될 때만) 정규식을 다시 만든다.
+// 예전엔 요청마다 settings()를 두 번 복사하고 배열을 문자열로 합쳐 비교했다
+let extraSrc: string[] | undefined
+let extraList: RegExp[] = []
 function extraRules() {
-    const src = settings().extraStubs.join('\n')
-    if (src !== extraCache.src) {
-        const list: RegExp[] = []
-        for (const p of settings().extraStubs) {
+    const src = settings().extraStubs
+    if (src !== extraSrc) {
+        extraSrc = src
+        extraList = []
+        for (const p of src) {
             try {
-                list.push(new RegExp(p))
+                extraList.push(new RegExp(p))
             } catch {}
         }
-        extraCache = { src, list }
     }
-    return extraCache.list
+    return extraList
 }
 
 const toPath = (url: unknown) =>
@@ -200,7 +203,8 @@ export function installRest(unpatches: Array<() => void>) {
                     const match = path.match(re)
                     if (match) return handler({ match, opts, call, get: rawGet })
                 }
-                if (extraRules().some(re => re.test(path))) return obj()
+                const extra = extraRules()
+                if (extra.length && extra.some(re => re.test(path))) return obj()
 
                 const res = original.apply(http, args)
                 res?.then?.(undefined, (e: any) => log('rest', `${method} ${path} → ${e?.status ?? '오류'} ${e?.body?.message ?? ''}`))

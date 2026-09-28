@@ -21,6 +21,9 @@ export function activate() {
 }
 
 export function deactivate() {
+    try {
+        ;(globalThis as any).__botClientReady = false
+    } catch {}
     disposeGuard()
     for (const u of unpatches.splice(0)) {
         try {

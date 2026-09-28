@@ -1,8 +1,8 @@
-import { before, instead } from '@vendetta/patcher'
 import { showToast } from '@vendetta/ui/toasts'
+import { before, instead } from '@vendetta/patcher'
 import { deferInteraction } from './api'
 import { isBotSession, stripBot } from './auth'
-import { findByProps, findByStoreName } from './modules'
+import { findByStoreName, getChannelStore } from './modules'
 import { buildReady, buildSupplemental, dmChannel, patchSelfUser, toUserGuild } from './ready'
 import { log, pushInteraction, rememberDm, saveSettings, settings, type Status } from './state'
 
@@ -22,6 +22,11 @@ interface Pending {
     timer: ReturnType<typeof setTimeout>
     forward: Forward
 }
+
+// 디스패치 중 우리가 손대는 이벤트. 나머지(메시지·입력중·접속상태 등 대부분)는 바로 통과시킨다
+const HANDLED = new Set(['READY', 'GUILD_CREATE', 'USER_UPDATE', 'INTERACTION_CREATE', 'MESSAGE_CREATE'])
+
+const passThrough = (type: string, data: any) => !HANDLED.has(type) || (type === 'MESSAGE_CREATE' && !!data?.guild_id)
 
 let socket: any
 let selfId: string | undefined
@@ -170,8 +175,8 @@ function ensureDm(msg: any, forward: Forward) {
     rememberDm(msg.channel_id, author, msg.id)
     let known = false
     try {
-        const ChannelStore = findByProps('getChannel', 'getDMFromUserId')
-        known = !!ChannelStore?.getChannel?.(msg.channel_id)
+        // 캐시된 스토어 사용 (예전엔 DM마다 모듈 전체를 다시 검색했다)
+        known = !!getChannelStore()?.getChannel?.(msg.channel_id)
     } catch {}
     if (!known) forward('CHANNEL_CREATE', dmChannel(msg.channel_id, author, msg.id))
 }
@@ -179,6 +184,7 @@ function ensureDm(msg: any, forward: Forward) {
 function onInteraction(i: any) {
     pushInteraction(i)
     if (settings().autoDefer) deferInteraction(i)
+    // 인터랙션은 사용자가 기다리는 이벤트라 이 알림은 남긴다 (설정에서 응답)
     const name = i?.data?.name ? `/${i.data.name}` : (i?.data?.custom_id ?? `type ${i?.type}`)
     const who = i?.member?.user?.username ?? i?.user?.username ?? '?'
     try {
@@ -189,10 +195,13 @@ function onInteraction(i: any) {
 function patchHandleDispatch(target: any): () => void {
     return instead('_handleDispatch', target, function (this: any, args: any[], original: any) {
         const self = this
-        if (!isBotSession()) return original.apply(self, args)
         // (data, type, …) / (type, data, …) 어느 순서든 대응
         const ti = typeof args[0] === 'string' ? 0 : 1
         const di = ti === 0 ? 1 : 0
+        // 빠른 경로: READY 대기 중이 아니고 손댈 이벤트도 아니면 즉시 통과 (클로저 생성·토큰 확인 없음).
+        // 서버 메시지는 가장 잦은 이벤트인데 우리는 DM만 다루므로 같이 건너뛴다
+        if (!pending && passThrough(args[ti], args[di])) return original.apply(self, args)
+        if (!isBotSession()) return original.apply(self, args)
         const forward: Forward = (t, d) => {
             const next = args.slice()
             next[ti] = t
@@ -206,9 +215,11 @@ function patchHandleDispatch(target: any): () => void {
 function patchEmit(target: any): () => void {
     return instead('emit', target, function (this: any, args: any[], original: any) {
         const self = this
-        if (args[0] !== 'dispatch' || !isBotSession()) return original.apply(self, args)
+        if (args[0] !== 'dispatch') return original.apply(self, args)
         const ti = typeof args[1] === 'string' ? 1 : 2
         const di = ti === 1 ? 2 : 1
+        if (!pending && passThrough(args[ti], args[di])) return original.apply(self, args)
+        if (!isBotSession()) return original.apply(self, args)
         const forward: Forward = (t, d) => {
             const next = args.slice()
             next[ti] = t
