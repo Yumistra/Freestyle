@@ -1,6 +1,7 @@
-import { findByProps } from '@vendetta/metro'
+import { findByName, findByProps } from '@vendetta/metro'
 import { clipboard, React } from '@vendetta/metro/common'
 import { after, before } from '@vendetta/patcher'
+import { getAssetIDByName } from '@vendetta/ui/assets'
 import { showToast } from '@vendetta/ui/toasts'
 import { findInReactTree } from '@vendetta/utils'
 import { formatOf, FORMAT, stickersOf, stickerUrl, uploadableGuilds, uploadSticker, type StickerItem } from './sticker'
@@ -8,16 +9,18 @@ import { formatOf, FORMAT, stickersOf, stickerUrl, uploadableGuilds, uploadStick
 const ROW_LABEL = '스티커 훔치기'
 const unpatches: Array<() => void> = []
 
-const ActionSheet = () => findByProps('openLazy', 'hideActionSheet')
+const LazyActionSheet = () => findByProps('openLazy', 'hideActionSheet')
 const SimpleSheet = () => findByProps('showSimpleActionSheet')
+// 메뉴 한 줄을 그리는 컴포넌트 (버튼을 복제할 때 쓴다)
+const ActionSheetRow = () =>
+    findByProps('ActionSheetRow')?.ActionSheetRow ?? findByName('ActionSheetRow', false)
 
 function hideSheets() {
     try {
-        ActionSheet()?.hideActionSheet?.()
+        LazyActionSheet()?.hideActionSheet?.()
     } catch {}
 }
 
-/** 스티커 하나에 대한 메뉴: URL 복사 + 업로드 가능한 서버 목록 */
 function openStickerMenu(s: StickerItem) {
     const guilds = uploadableGuilds()
     const copy = () => {
@@ -30,13 +33,8 @@ function openStickerMenu(s: StickerItem) {
         const err = await uploadSticker(s, g.id)
         showToast(err ?? `${g.name}에 "${s.name}" 스티커를 추가했어요`)
     }
-
     const sheet = SimpleSheet()
-    if (typeof sheet?.showSimpleActionSheet !== 'function') {
-        // 메뉴를 못 띄우면 최소한 URL이라도 복사
-        copy()
-        return
-    }
+    if (typeof sheet?.showSimpleActionSheet !== 'function') return copy()
     const lottie = formatOf(s) === FORMAT.LOTTIE
     sheet.showSimpleActionSheet({
         key: 'StealStickerSheet',
@@ -54,10 +52,9 @@ function openStickerMenu(s: StickerItem) {
 
 function onSteal(stickers: StickerItem[]) {
     hideSheets()
-    if (stickers.length === 1) return openStickerMenu(stickers[0])
-    // 메시지에 스티커가 여러 개면(최대 3개) 먼저 고르기
+    if (stickers.length === 1) return setTimeout(() => openStickerMenu(stickers[0]), 200)
     const sheet = SimpleSheet()
-    if (typeof sheet?.showSimpleActionSheet !== 'function') return openStickerMenu(stickers[0])
+    if (typeof sheet?.showSimpleActionSheet !== 'function') return setTimeout(() => openStickerMenu(stickers[0]), 200)
     sheet.showSimpleActionSheet({
         key: 'StealStickerPick',
         header: { title: '어떤 스티커를 가져올까요?', onClose: hideSheets },
@@ -65,30 +62,37 @@ function onSteal(stickers: StickerItem[]) {
     })
 }
 
-/** 메뉴 트리에서 버튼 줄(label + onPress를 가진 요소들의 배열)을 찾는다 */
-const isRowList = (n: any) => Array.isArray(n) && n.some(c => c?.props?.label != null && typeof c?.props?.onPress === 'function')
-
 export default {
     onLoad() {
-        const sheet = ActionSheet()
-        if (!sheet) return
+        const sheet = LazyActionSheet()
+        if (!sheet) return showToast('[Steal Sticker] 액션시트 모듈을 못 찾았어요')
+
         unpatches.push(
             before('openLazy', sheet, (args: any[]) => {
                 const [component, key, ctx] = args
                 const stickers = stickersOf(ctx?.message)
                 if (key !== 'MessageLongPressActionSheet' || !stickers.length || typeof component?.then !== 'function') return
+
                 component.then((instance: any) => {
+                    const Row = ActionSheetRow()
                     const unpatch = after('default', instance, (_a: any[], tree: any) => {
-                        // 메뉴가 닫히면 패치도 같이 풀기
                         React.useEffect(() => () => unpatch(), [])
-                        const rows = findInReactTree(tree, isRowList)
-                        if (!rows || rows.some((c: any) => c?.props?.label === ROW_LABEL)) return
-                        const template = rows.find((c: any) => c?.props?.label != null && typeof c?.props?.onPress === 'function')
-                        rows.push(
-                            React.cloneElement(template, {
+
+                        // Stealmoji 방식: 기존 ActionSheetRow 컴포넌트를 트리에서 찾아, 그게 담긴 배열에 한 줄 추가한다
+                        const row = findInReactTree(
+                            tree,
+                            (n: any) => n?.props?.label != null && (Row ? n.type === Row : typeof n?.props?.onPress === 'function'),
+                        )
+                        const siblings = findInReactTree(tree, (n: any) => Array.isArray(n) && n.includes(row))
+                        if (!row || !siblings || siblings.some((c: any) => c?.props?.label === ROW_LABEL)) return
+
+                        siblings.push(
+                            React.createElement(row.type, {
                                 key: 'steal-sticker',
                                 label: ROW_LABEL,
-                                subLabel: undefined,
+                                icon: row.props.icon
+                                    ? React.cloneElement(row.props.icon, { source: getAssetIDByName?.('ic_sticker') ?? row.props.icon.props?.source })
+                                    : undefined,
                                 onPress: () => onSteal(stickers),
                             }),
                         )
