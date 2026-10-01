@@ -1,0 +1,9 @@
+{
+    "name": "Native Toasts",
+    "description": "플러그인이 띄우는 안드로이드 기본 토스트를 디스코드 토스트 모양으로 바꿔 보여줍니다.",
+    "authors": [{ "name": "Yumistra", "id": "0" }],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ic_notification_settings"
+    }
+}
