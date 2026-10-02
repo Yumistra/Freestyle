@@ -100,3 +100,13 @@ export async function uploadSticker(s: StickerItem, guildId: string): Promise<st
         return `업로드 실패: ${String((e as Error)?.message ?? e)}`
     }
 }
+
+/** 스티커 상세 창 props에서 스티커 꺼내기 (renderableSticker 등, 버전마다 필드 이름이 달라 여러 이름 확인) */
+export function stickerFromProps(props: any): StickerItem | undefined {
+    const o = props?.renderableSticker ?? props?.sticker ?? props?.stickerItem
+    if (!o || typeof o !== 'object') return
+    const id = o.id ?? o.sticker_id ?? o.stickerId ?? o.sticker?.id
+    if (id == null) return
+    const fmt = o.format_type ?? o.formatType ?? o.format ?? o.sticker?.format_type ?? o.sticker?.formatType
+    return { id: String(id), name: String(o.name ?? o.sticker?.name ?? 'sticker'), format_type: Number(fmt ?? FORMAT.PNG) }
+}
