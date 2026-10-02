@@ -2,7 +2,7 @@
     "name": "Steal Sticker",
     "description": "메시지를 길게 눌러 스티커를 내 서버에 추가하거나 URL을 복사합니다.",
     "authors": [{ "name": "Yumistra", "id": "0" }],
-    "main": "src/index.ts",
+    "main": "src/index.tsx",
     "vendetta": {
         "icon": "ic_sticker"
     }
