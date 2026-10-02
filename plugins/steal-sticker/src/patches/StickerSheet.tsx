@@ -3,11 +3,11 @@ import { before } from '@vendetta/patcher'
 import { showToast } from '@vendetta/ui/toasts'
 import { findInReactTree } from '@vendetta/utils'
 import { LazyActionSheet } from '../modules'
-import { stickerFromProps, type StickerItem } from '../sticker'
+import { isOfficialSticker, stickerFromProps, type StickerItem } from '../sticker'
 import StealButtons from '../ui/StealButtons'
 
 const SHEET_NAME = 'sticker_detail_action_sheet'
-export const DEBUG = true
+export const DEBUG = false
 const dbg = (msg: string) => DEBUG && showToast(`[Steal Sticker] ${msg}`)
 
 /**
@@ -35,7 +35,11 @@ function wrapContent(Type: any) {
     const Wrapped = function StealStickerContent(props: any, ref?: any) {
         const { __stealSticker, ...rest } = props
         const out = render(rest, ref)
-        if (__stealSticker) insertButtons(out, __stealSticker)
+        try {
+            if (__stealSticker) insertButtons(out, __stealSticker)
+        } catch (e) {
+            dbg(`버튼 추가 실패: ${String(e)}`)
+        }
         return out
     }
     contentCache.set(Type, Wrapped)
@@ -49,20 +53,20 @@ function wrapSheet(Type: any) {
     const render = renderFn(Type)!
     const Wrapped = function StealStickerSheet(props: any, ref?: any) {
         const out = render(props, ref)
-        const sticker = stickerFromProps(props)
-        if (!sticker) {
-            dbg(`스티커 정보 없음: ${Object.keys(props ?? {}).join(', ')}`)
-            return out
+        try {
+            const sticker = stickerFromProps(props)
+            if (!sticker) return out
+            const holder = out?.props?.children
+            const view = holder?.props?.children
+            if (view && !Array.isArray(view) && renderFn(view.type)) {
+                holder.props.children = { ...view, type: wrapContent(view.type), props: { ...view.props, __stealSticker: sticker } }
+            } else {
+                dbg(`내용 요소 구조가 달라요 → 창 맨 아래에 붙임 (${Object.keys(out?.props ?? {}).join(', ')})`)
+                insertButtons(out, sticker)
+            }
+        } catch (e) {
+            dbg(`창 패치 실패: ${String(e)}`)
         }
-        const holder = out?.props?.children
-        const view = holder?.props?.children
-        if (view && renderFn(view.type)) {
-            holder.props.children = { ...view, type: wrapContent(view.type), props: { ...view.props, __stealSticker: sticker } }
-            return out
-        }
-        // 구조가 다르면: 창 결과에 바로 붙여 본다
-        dbg(`내용 요소 구조가 달라요 → 창 맨 아래에 붙임 (${Object.keys(out?.props ?? {}).join(', ')})`)
-        insertButtons(out, sticker)
         return out
     }
     sheetCache.set(Type, Wrapped)
@@ -81,7 +85,7 @@ function insertButtons(component: any, sticker: StickerItem) {
     const children = component?.props?.children
     if (Array.isArray(children)) {
         if (!children.some((c: any) => c?.key === 'steal-sticker-buttons')) children.push(ours)
-    } else if (component?.props) {
+    } else if (component?.props && typeof children !== 'function') {
         component.props.children = [children, ours]
     } else dbg('버튼 넣을 자리를 못 찾음')
 }
@@ -101,8 +105,14 @@ export default () =>
             // 모듈.default가 돌려주는 요소의 type이 실제 창 컴포넌트 (Stealmoji와 동일)
             const Default = function StealStickerDefault(props: any) {
                 const res = typeof Orig === 'function' ? Orig(props) : React.createElement(Orig, props)
-                if (res && renderFn(res.type)) return { ...res, type: wrapSheet(res.type) }
-                dbg(`창 요소 형태가 달라요: ${typeof res?.type}`)
+                try {
+                    // 공식 스티커이거나 스티커 정보를 못 읽으면 원래 창 그대로 (튕김 방지)
+                    if (isOfficialSticker(props) || !stickerFromProps(props)) return res
+                    if (res && renderFn(res.type)) return { ...res, type: wrapSheet(res.type) }
+                    dbg(`창 요소 형태가 달라요: ${typeof res?.type}`)
+                } catch (e) {
+                    dbg(`창 감싸기 실패: ${String(e)}`)
+                }
                 return res
             }
             return { ...mod, default: Default }

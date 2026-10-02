@@ -22,22 +22,22 @@ export default function StealButtons({ sticker }: { sticker: StickerItem }) {
     const url = stickerUrl(sticker)
 
     const buttons = [
-        !lottie && { text: '서버에 추가', callback: () => showAddToServerSheet(sticker) },
+        !lottie && { text: 'Add to Server', callback: () => showAddToServerSheet(sticker) },
         {
-            text: 'URL 복사',
+            text: 'Copy URL to clipboard',
             callback: () => {
                 clipboard.setString(url)
                 LazyActionSheet.hideActionSheet()
-                showToast(`${sticker.name} 스티커 URL을 복사했어요`, getAssetIDByName('ic_copy_message_link'))
+                showToast(`Copied ${sticker.name}'s URL to clipboard`, getAssetIDByName('ic_copy_message_link'))
             },
         },
         !lottie &&
             download && {
-                text: '다운로드 폴더에 저장',
+                text: `Save image to ${ReactNative.Platform.select({ android: 'Downloads', default: 'Camera Roll' })}`,
                 callback: () => {
                     download(url, formatOf(sticker) === FORMAT.GIF ? 1 : 0)
                     LazyActionSheet.hideActionSheet()
-                    showToast(`${sticker.name} 스티커를 다운로드 폴더에 저장했어요`, getAssetIDByName('toast_image_saved'))
+                    showToast(`Saved ${sticker.name}'s image to ${ReactNative.Platform.select({ android: 'Downloads', default: 'Camera Roll' })}`, getAssetIDByName('toast_image_saved'))
                 },
             },
     ].filter(Boolean) as Array<{ text: string; callback: () => void }>

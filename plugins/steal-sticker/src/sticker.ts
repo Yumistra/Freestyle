@@ -72,9 +72,9 @@ const clamp = (v: string, min: number, max: number, pad: string) => {
 
 /** 스티커를 서버에 업로드. 성공하면 null, 실패하면 사용자에게 보여줄 메시지 */
 export async function uploadSticker(s: StickerItem, guildId: string): Promise<string | null> {
-    if (formatOf(s) === FORMAT.LOTTIE) return '움직이는 Lottie 스티커는 디스코드 공식·파트너 서버만 업로드할 수 있어요'
+    if (formatOf(s) === FORMAT.LOTTIE) return 'Animated Lottie stickers can only be uploaded by official or partnered servers'
     const auth = token()
-    if (!auth) return '로그인 정보를 찾지 못했어요'
+    if (!auth) return 'Could not find your login token'
 
     const info: any = await details(s, auth)
     const isGif = formatOf(s) === FORMAT.GIF
@@ -93,11 +93,11 @@ export async function uploadSticker(s: StickerItem, guildId: string): Promise<st
         try {
             body = await res.json()
         } catch {}
-        if (body?.code === 30039) return '이 서버의 스티커 슬롯이 꽉 찼어요'
-        if (body?.code === 50138 || res.status === 413) return '파일이 너무 커요 (최대 512KB)'
-        return body?.message ? `업로드 실패: ${body.message}` : `업로드 실패 (HTTP ${res.status})`
+        if (body?.code === 30039) return 'This server has no sticker slots left'
+        if (body?.code === 50138 || res.status === 413) return 'The sticker file is too large (max 512 KB)'
+        return body?.message ? `Upload failed: ${body.message}` : `Upload failed (HTTP ${res.status})`
     } catch (e) {
-        return `업로드 실패: ${String((e as Error)?.message ?? e)}`
+        return `Upload failed: ${String((e as Error)?.message ?? e)}`
     }
 }
 
@@ -109,4 +109,17 @@ export function stickerFromProps(props: any): StickerItem | undefined {
     if (id == null) return
     const fmt = o.format_type ?? o.formatType ?? o.format ?? o.sticker?.format_type ?? o.sticker?.formatType
     return { id: String(id), name: String(o.name ?? o.sticker?.name ?? 'sticker'), format_type: Number(fmt ?? FORMAT.PNG) }
+}
+
+/**
+ * 공식 스티커(디스코드 기본 스티커 팩)인지. 공식 스티커 창은 구조가 달라서 건드리면 앱이 튕기고,
+ * 대부분 Lottie라 서버에 추가할 수도 없으므로 아예 손대지 않는다.
+ * 서버 스티커는 guild_id가 있고, 공식 스티커는 pack_id가 있거나 type이 1(STANDARD)이다.
+ */
+export function isOfficialSticker(props: any): boolean {
+    const o = props?.renderableSticker ?? props?.sticker ?? props?.stickerItem
+    const raw = o?.sticker ?? o
+    if (!raw || typeof raw !== 'object') return false
+    if (raw.guild_id ?? raw.guildId) return false
+    return raw.type === 1 || raw.pack_id != null || raw.packId != null || formatOf(raw) === FORMAT.LOTTIE
 }
