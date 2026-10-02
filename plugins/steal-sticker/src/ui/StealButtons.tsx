@@ -22,7 +22,13 @@ export default function StealButtons({ sticker }: { sticker: StickerItem }) {
     const url = stickerUrl(sticker)
 
     const buttons = [
-        !lottie && { text: 'Add to Server', callback: () => showAddToServerSheet(sticker) },
+        {
+            text: 'Add to Server',
+            callback: () =>
+                lottie
+                    ? showToast('Discord only lets official and partnered servers upload animated Lottie stickers', getAssetIDByName('Small'))
+                    : showAddToServerSheet(sticker),
+        },
         {
             text: 'Copy URL to clipboard',
             callback: () => {
