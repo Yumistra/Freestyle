@@ -1,7 +1,8 @@
-import { React, ReactNative } from '@vendetta/metro/common'
-import { before } from '@vendetta/patcher'
-import { showToast } from '@vendetta/ui/toasts'
-import { LazyActionSheet } from '../modules'
+import { before } from '@revenge-mod/patcher'
+import { createElement, forwardRef, memo } from 'react'
+import { View } from 'react-native'
+import { sheets } from '../modules'
+import { showToast } from '../toast'
 import { stickerFromProps, type StickerItem } from '../sticker'
 import StealButtons from '../ui/StealButtons'
 
@@ -55,13 +56,13 @@ function wrapComponent(Type: any): any {
         }
     } else if (typeof Type?.render === 'function') {
         // forwardRef: ref를 그대로 넘긴다
-        Wrapped = React.forwardRef((props: any, ref: any) => {
+        Wrapped = forwardRef((props: any, ref: any) => {
             const { [STICKER_PROP]: sticker, ...rest } = props ?? {}
             return post(Type.render(rest, ref), sticker)
         })
     } else if (Type?.type != null) {
         // memo: 안쪽을 감싸고 비교 함수는 유지
-        Wrapped = React.memo(wrapComponent(Type.type), Type.compare)
+        Wrapped = memo(wrapComponent(Type.type), Type.compare)
     } else return Type
 
     for (const k of ['displayName', 'defaultProps']) if (Type[k] != null) (Wrapped as any)[k] = Type[k]
@@ -131,7 +132,7 @@ function inject(node: any, sticker: StickerItem, depth: number): boolean {
         if (inject(children, sticker, depth + 1)) return true
         // 안에 넣을 자리가 없으면, View일 때만 [기존 자식, 버튼]으로 바꾼다
         // (View는 자식이 여러 개여도 안전. 자식 하나만 받는 컴포넌트는 건드리지 않는다)
-        if (node.type === ReactNative.View) {
+        if (node.type === View) {
             props.children = [children, ours(sticker)]
             return true
         }
@@ -148,15 +149,15 @@ function inject(node: any, sticker: StickerItem, depth: number): boolean {
 }
 
 export default () =>
-    before('openLazy', LazyActionSheet, (args: any[]) => {
+    before(sheets(), 'openLazy', (args: any[]) => {
         const [lazySheet, name] = args
-        if (name !== SHEET_NAME || typeof lazySheet?.then !== 'function') return
+        if (name !== SHEET_NAME || typeof lazySheet?.then !== 'function') return args
 
         args[0] = lazySheet.then((mod: any) => {
             const Orig = mod?.default
             if (!Orig) return mod
             const Default = function StealStickerDefault(props: any) {
-                const res = typeof Orig === 'function' && !Orig.prototype?.isReactComponent ? Orig(props) : React.createElement(Orig, props)
+                const res = typeof Orig === 'function' && !Orig.prototype?.isReactComponent ? Orig(props) : createElement(Orig, props)
                 try {
                     const sticker = stickerFromProps(props)
                     // 모듈.default가 돌려준 요소의 type이 실제 창 컴포넌트 (Stealmoji와 동일) → 형태를 보존해 감싼다
@@ -170,5 +171,6 @@ export default () =>
             }
             return { ...mod, default: Default }
         })
+        // Revenge 패처는 before 훅이 돌려준 배열을 그대로 인자로 쓴다 (안 돌려주면 원래 함수가 망가짐)
         return args
     })

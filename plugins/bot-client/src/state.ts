@@ -1,4 +1,3 @@
-import { storage } from '@vendetta/plugin'
 import { DEFAULT_INTENTS } from './intents'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'invisible'
@@ -59,37 +58,58 @@ export const DEFAULT_SETTINGS: Settings = {
 // 연속 이 횟수만큼 실패하면 자동으로 봇 패치를 끈다
 export const MAX_FAILS = 2
 
-const store = storage as Partial<Settings>
+/** Revenge Next 플러그인 JSON 저장소 (plugin.api.jsonStorage) */
+interface Storage {
+    cache?: any
+    get(): Promise<any>
+    set(value: any, replace?: boolean): Promise<void>
+}
 
-// 설정 스냅샷 캐시: settings()가 REST 요청·게이트웨이 이벤트마다 불리는데, 매번 저장소 프록시를
-// 통째로 펼쳐 복사하면 비싸다. 저장은 전부 saveSettings를 거치므로 그때만 스냅샷을 갱신한다.
+let store: Storage | undefined
+
+// 설정 스냅샷: settings()가 REST 요청·게이트웨이 이벤트마다 불리므로 메모리에 들고 있고,
+// 저장은 전부 saveSettings를 거치므로 그때만 스냅샷을 바꾸고 디스크에 쓴다.
 let snapshot: Settings | undefined
 
-/** storage에 기본값을 한 번 채워 넣는다 (Vendetta storage는 프록시라 직접 대입 가능) */
-export function initStorage() {
-    for (const k in DEFAULT_SETTINGS) {
-        if (store[k as keyof Settings] === undefined) {
-            ;(store as any)[k] = (DEFAULT_SETTINGS as any)[k]
-        }
-    }
-    snapshot = { ...DEFAULT_SETTINGS, ...store }
+/** 저장소를 디스크에서 읽어 스냅샷을 만든다 (start에서 한 번) */
+export async function initStorage(storage: Storage) {
+    store = storage
+    let saved: any
+    try {
+        saved = await storage.get()
+    } catch {}
+    snapshot = { ...DEFAULT_SETTINGS, ...(saved && typeof saved === 'object' ? saved : {}) }
 }
 
 export function settings(): Settings {
-    return snapshot ?? (snapshot = { ...DEFAULT_SETTINGS, ...store })
+    return snapshot ?? (snapshot = { ...DEFAULT_SETTINGS })
 }
 
-/** 바뀐 값만 저장한다. 저장소는 키 하나를 쓸 때마다 디스크에 기록하므로 같은 값 재저장을 건너뛴다 */
+// 디스크 쓰기는 순서대로 하나씩 (빠르게 연달아 저장해도 마지막 값이 남게)
+let writing: Promise<unknown> = Promise.resolve()
+function persist() {
+    const s = store
+    if (!s) return
+    writing = writing.then(
+        () => s.set({ ...settings() }, true),
+        () => s.set({ ...settings() }, true),
+    )
+    writing.catch(e => console.error('[BotClient] 설정 저장 실패', e))
+}
+
+/** 바뀐 값만 반영한다. 같은 값 재저장은 건너뛴다 */
 export function saveSettings(patch: Partial<Settings>) {
     const cur = settings()
     let changed = false
     for (const k in patch) {
         const v = (patch as any)[k]
         if (typeof v !== 'object' && Object.is((cur as any)[k], v)) continue
-        ;(store as any)[k] = v
         changed = true
     }
-    if (changed) snapshot = { ...cur, ...patch }
+    if (!changed) return
+    snapshot = { ...cur, ...patch }
+    persist()
+    notifyNow()
 }
 
 // ── 로그 / 인터랙션 버퍼 (설정 화면에서 표시) ──────────────────────────
@@ -131,6 +151,11 @@ export function pushInteraction(i: any) {
 
 export const getLogs = () => logs
 export const getInteractions = () => interactions
+
+/** 설정이 바뀌면 화면을 바로 다시 그린다 */
+function notifyNow() {
+    for (const fn of listeners) fn()
+}
 
 export function subscribe(fn: () => void) {
     listeners.add(fn)

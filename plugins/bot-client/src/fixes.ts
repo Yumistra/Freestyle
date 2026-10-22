@@ -1,8 +1,7 @@
-import { find } from '@vendetta/metro'
-import { FluxDispatcher } from '@vendetta/metro/common'
-import { instead } from '@vendetta/patcher'
+import { Dispatcher as FluxDispatcher } from '@revenge-mod/discord/common/flux'
+import { instead } from '@revenge-mod/patcher'
 import { isBotSession } from './auth'
-import { getUserStore } from './modules'
+import { find, getUserStore } from './modules'
 import { log } from './state'
 
 // 봇 계정엔 2단계 인증 정보가 없어서, 이 함수들이 내부에서 undefined.includes(...)로 터진다
@@ -12,7 +11,7 @@ const MFA_METHODS = ['hasTOTPEnabled', 'hasWebAuthnEnabled', 'hasSMSEnabled'] as
 function guard(obj: any, key: string, fallback: unknown, unpatches: Array<() => void>) {
     if (typeof obj?.[key] !== 'function') return
     unpatches.push(
-        instead(key, obj, function (this: any, args: any[], original: any) {
+        instead(obj, key, function (this: any, args: any[], original: any) {
             if (!isBotSession()) return original.apply(this, args)
             try {
                 return original.apply(this, args)
@@ -32,7 +31,7 @@ function guard(obj: any, key: string, fallback: unknown, unpatches: Array<() => 
 export function installUserFixes(unpatches: Array<() => void>) {
     // 유틸 모듈로 export된 2FA 함수: 모듈 검색을 세 번 하지 않고 한 번에 찾는다
     try {
-        const mod = find((m: any) => m && MFA_METHODS.some(k => typeof m[k] === 'function') && !m.getCurrentUser)
+        const mod = find('mfa', (m: any) => MFA_METHODS.some(k => typeof m[k] === 'function') && !m.getCurrentUser)
         for (const key of MFA_METHODS) guard(mod, key, false, unpatches)
     } catch {}
 

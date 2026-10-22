@@ -1,5 +1,7 @@
-import { FluxDispatcher, ReactNative } from '@vendetta/metro/common'
-import { after } from '@vendetta/patcher'
+import { Dispatcher as FluxDispatcher } from '@revenge-mod/discord/common/flux'
+import { BundleUpdaterManager } from '@revenge-mod/discord/native'
+import { after } from '@revenge-mod/patcher'
+import { AppRegistry, AppState, NativeModules, TurboModuleRegistry } from 'react-native'
 import { isBotSession, logout } from './auth'
 import { log, MAX_FAILS, saveSettings, settings } from './state'
 
@@ -109,13 +111,20 @@ export function bailOut(reason: string, delayMs = 0) {
 
 /** 디스코드 JS 번들을 다시 불러온다 (Revenge 오류 화면의 "Reload Discord"와 같은 기능) */
 export function reloadApp(): boolean {
-    const RN = ReactNative as any
+    const get = (f: () => any) => {
+        try {
+            return f()
+        } catch {
+            return undefined
+        }
+    }
     const candidates = [
-        (globalThis as any).nativeModuleProxy?.BundleUpdaterManager,
-        RN?.NativeModules?.BundleUpdaterManager,
-        RN?.NativeModules?.RTNBundleUpdaterManager,
-        RN?.TurboModuleRegistry?.get?.('NativeBundleUpdaterManager'),
-        RN?.TurboModuleRegistry?.get?.('BundleUpdaterManager'),
+        get(() => BundleUpdaterManager),
+        get(() => (globalThis as any).nativeModuleProxy?.BundleUpdaterManager),
+        get(() => (NativeModules as any)?.BundleUpdaterManager),
+        get(() => (NativeModules as any)?.RTNBundleUpdaterManager),
+        get(() => (TurboModuleRegistry as any)?.get?.('NativeBundleUpdaterManager')),
+        get(() => (TurboModuleRegistry as any)?.get?.('BundleUpdaterManager')),
     ]
     for (const m of candidates) {
         if (typeof m?.reload === 'function') {
@@ -228,31 +237,36 @@ export function disposeGuard() {
  *  - 콜드 스타트의 첫 runApplication은 백그라운드 전에 일어나므로 새로고침하지 않는다
  *  - 홈 버튼으로 나갔다 돌아오는 건 runApplication이 다시 불리지 않아 영향 없다
  */
+let sawBackground = false
+
+function onRunApplication() {
+    if (!sawBackground) return
+    sawBackground = false
+    const s = settings()
+    if (!s.autoReload || !s.enabled || !isBotSession()) return
+    log('gateway', '앱을 다시 열어서 새로 불러옵니다 (무한 로딩 방지)')
+    setTimeout(() => {
+        if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 강제 종료 후 다시 켜주세요')
+    }, 300)
+}
+
 export function installRelaunchReload(unpatches: Array<() => void>) {
-    const RN = ReactNative as any
-    const AppRegistry = RN?.AppRegistry
-    const AppState = RN?.AppState
     if (typeof AppRegistry?.runApplication !== 'function' || typeof AppState?.addEventListener !== 'function') {
         log('error', '앱 재실행 감지 불가 (AppRegistry/AppState 없음)')
         return
     }
 
-    let sawBackground = false
+    sawBackground = false
     const sub = AppState.addEventListener('change', (state: string) => {
         if (state === 'background') sawBackground = true
     })
     unpatches.push(() => sub?.remove?.())
 
     unpatches.push(
-        after('runApplication', AppRegistry, () => {
-            if (!sawBackground) return
-            sawBackground = false
-            const s = settings()
-            if (!s.autoReload || !s.enabled || !isBotSession()) return
-            log('gateway', '앱을 다시 열어서 새로 불러옵니다 (무한 로딩 방지)')
-            setTimeout(() => {
-                if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 강제 종료 후 다시 켜주세요')
-            }, 300)
+        // Revenge 패처의 after 훅은 결과값을 받아서 돌려줘야 한다
+        after(AppRegistry as any, 'runApplication', (result: any) => {
+            onRunApplication()
+            return result
         }),
     )
 }

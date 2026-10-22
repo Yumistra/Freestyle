@@ -1,4 +1,4 @@
-import { instead } from '@vendetta/patcher'
+import { instead } from '@revenge-mod/patcher'
 import { isBotSession } from './auth'
 import { findByProps, getChannelStore } from './modules'
 import { log, settings } from './state'
@@ -192,7 +192,7 @@ export function installRest(unpatches: Array<() => void>) {
     for (const [key, method] of METHODS) {
         if (typeof http[key] !== 'function') continue
         unpatches.push(
-            instead(key, http, (args: any[], original: any) => {
+            instead(http, key, (args: any[], original: any) => {
                 if (!isBotSession()) return original.apply(http, args)
                 const opts = typeof args[0] === 'string' ? { url: args[0] } : (args[0] ?? {})
                 const path = toPath(opts.url)

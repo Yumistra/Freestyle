@@ -1,11 +1,9 @@
-import { React } from '@vendetta/metro/common'
-import { getAssetIDByName } from '@vendetta/ui/assets'
-import { ErrorBoundary, Forms } from '@vendetta/ui/components'
-import { showToast } from '@vendetta/ui/toasts'
-import { getActionSheet, getCloseButton, getFlatList, getGuildIcon, getStickersStore, getTitleHeader, LazyActionSheet } from '../modules'
+import { Component, useMemo } from 'react'
+import { Image } from 'react-native'
+import { getActionSheet, getCloseButton, getDesign, getFlatList, getGuildIcon, getStickersStore, getTitleHeader, hideSheet, sheets } from '../modules'
 import { stickerUrl, uploadableGuilds, uploadSticker, type StickerItem } from '../sticker'
-
-const { FormRow, FormIcon, FormDivider } = Forms as any
+import { showToast } from '../toast'
+import type { ReactNode } from 'react'
 
 // 서버 부스트 단계별 스티커 슬롯 (0~3단계)
 const SLOTS = [5, 15, 30, 60]
@@ -17,29 +15,47 @@ function hasSlot(guild: any): boolean | undefined {
 }
 
 function upload(s: StickerItem, guild: any) {
-    LazyActionSheet.hideActionSheet()
+    hideSheet()
     showToast(`Adding to ${guild.name}…`)
-    uploadSticker(s, guild.id).then(err =>
-        showToast(err ?? `Added ${s.name} to ${guild.name}`, getAssetIDByName(err ? 'Small' : 'Check')),
-    )
+    uploadSticker(s, guild.id).then(err => showToast(err ?? `Added ${s.name} to ${guild.name}`))
+}
+
+// 클래스는 React가 준비된 뒤에 만든다 (플러그인 스크립트가 처음 평가될 땐 React가 아직 없을 수 있음)
+let ErrorBoundaryClass: any
+function getErrorBoundary() {
+    return (ErrorBoundaryClass ??= class ErrorBoundary extends Component<{ children: ReactNode }, { error?: unknown }> {
+        state: { error?: unknown } = {}
+        static getDerivedStateFromError(error: unknown) {
+            return { error }
+        }
+        render() {
+            if (this.state.error) {
+                const { TableRow } = getDesign()
+                return <TableRow label='Something went wrong' subLabel={String((this.state.error as Error)?.message ?? this.state.error)} />
+            }
+            return this.props.children
+        }
+    })
 }
 
 function GuildRow({ guild, sticker }: { guild: any; sticker: StickerItem }) {
+    const { TableRow } = getDesign()
     const icon = getGuildIcon()
-    const slot = React.useMemo(() => hasSlot(guild), [])
+    const slot = useMemo(() => hasSlot(guild), [])
     return (
-        <FormRow
-            leading={icon?.default ? <icon.default guild={guild} size={icon.GuildIconSizes?.MEDIUM} animate={false} /> : undefined}
+        <TableRow
+            icon={icon?.default ? <icon.default guild={guild} size={icon.GuildIconSizes?.MEDIUM} animate={false} /> : undefined}
             disabled={slot === false}
             label={guild.name}
             subLabel={slot === false ? 'No slots available' : undefined}
-            trailing={<FormIcon style={{ opacity: 1 }} source={getAssetIDByName('ic_add_24px')} />}
+            arrow
             onPress={() => upload(sticker, guild)}
         />
     )
 }
 
 function AddToServer({ sticker }: { sticker: StickerItem }) {
+    const { TableRow } = getDesign()
     const guilds = uploadableGuilds()
     const TitleHeader = getTitleHeader()
     const CloseButton = getCloseButton()
@@ -49,19 +65,18 @@ function AddToServer({ sticker }: { sticker: StickerItem }) {
             {TitleHeader && (
                 <TitleHeader
                     title={`Stealing ${sticker.name}`}
-                    leading={<FormIcon style={{ marginRight: 12, opacity: 1 }} source={{ uri: stickerUrl(sticker) }} disableColor />}
-                    trailing={CloseButton ? <CloseButton onPress={() => LazyActionSheet.hideActionSheet()} /> : undefined}
+                    leading={<Image source={{ uri: stickerUrl(sticker) }} style={{ width: 32, height: 32, marginRight: 12 }} />}
+                    trailing={CloseButton ? <CloseButton onPress={() => hideSheet()} /> : undefined}
                 />
             )}
             {guilds.length === 0 ? (
-                <FormRow label='You have no servers where you can add stickers' />
+                <TableRow label='You have no servers where you can add stickers' />
             ) : FlatList ? (
                 <FlatList
                     style={{ flex: 1 }}
                     contentContainerStyle={{ paddingBottom: 24 }}
                     data={guilds}
                     renderItem={({ item }: any) => <GuildRow guild={item} sticker={sticker} />}
-                    ItemSeparatorComponent={FormDivider}
                     keyExtractor={(x: any) => x.id}
                 />
             ) : (
@@ -75,6 +90,7 @@ function AddToServer({ sticker }: { sticker: StickerItem }) {
 export function showAddToServerSheet(sticker: StickerItem) {
     const ActionSheet = getActionSheet()
     if (!ActionSheet) return showToast('Could not open the server list')
+    const ErrorBoundary = getErrorBoundary()
     const element = (
         <ActionSheet scrollable>
             <ErrorBoundary>
@@ -82,5 +98,5 @@ export function showAddToServerSheet(sticker: StickerItem) {
             </ErrorBoundary>
         </ActionSheet>
     )
-    LazyActionSheet.openLazy(Promise.resolve({ default: () => element }), 'StealStickerAddToServer')
+    sheets().openLazy(Promise.resolve({ default: () => element }), 'StealStickerAddToServer', {})
 }

@@ -1,9 +1,16 @@
 {
-    "name": "Steal Sticker",
-    "description": "Steal stickers on mobile with ease. Adds Add to Server, Copy URL and Save image buttons to the sticker sheet.",
-    "authors": [{ "name": "Yumistra", "id": "0" }],
-    "main": "src/index.ts",
-    "vendetta": {
-        "icon": "ic_sticker"
-    }
+	"format": 1,
+	"id": "yumistra.steal-sticker",
+	"name": "Steal Sticker",
+	"description": "Steal stickers on mobile with ease. Adds Add to Server, Copy URL and Save image buttons to the sticker sheet.",
+	"author": "Yumistra",
+	"icon": "StickerIcon",
+	"version": "2.0.0",
+	"dependencies": {
+		"revenge.api": {},
+		"discord": {}
+	},
+	"dist": {
+		"script": "index.js"
+	}
 }

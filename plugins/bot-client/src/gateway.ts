@@ -1,10 +1,10 @@
-import { showToast } from '@vendetta/ui/toasts'
-import { before, instead } from '@vendetta/patcher'
+import { before, instead } from '@revenge-mod/patcher'
 import { deferInteraction } from './api'
 import { isBotSession, stripBot } from './auth'
 import { findByStoreName, getChannelStore } from './modules'
 import { buildReady, buildSupplemental, dmChannel, patchSelfUser, toUserGuild } from './ready'
 import { log, pushInteraction, rememberDm, saveSettings, settings, type Status } from './state'
+import { showToast } from './toast'
 
 type Forward = (type: string, data: any) => unknown
 
@@ -69,7 +69,7 @@ function buildIdentify(d: any) {
 }
 
 function patchSend(target: any): () => void {
-    return instead('send', target, function (this: any, args: any[], original: any) {
+    return instead(target, 'send', function (this: any, args: any[], original: any) {
         const self = this
         if (!isBotSession()) return original.apply(self, args)
         const [op, d] = args
@@ -193,7 +193,7 @@ function onInteraction(i: any) {
 }
 
 function patchHandleDispatch(target: any): () => void {
-    return instead('_handleDispatch', target, function (this: any, args: any[], original: any) {
+    return instead(target, '_handleDispatch', function (this: any, args: any[], original: any) {
         const self = this
         // (data, type, …) / (type, data, …) 어느 순서든 대응
         const ti = typeof args[0] === 'string' ? 0 : 1
@@ -213,7 +213,7 @@ function patchHandleDispatch(target: any): () => void {
 }
 
 function patchEmit(target: any): () => void {
-    return instead('emit', target, function (this: any, args: any[], original: any) {
+    return instead(target, 'emit', function (this: any, args: any[], original: any) {
         const self = this
         if (args[0] !== 'dispatch') return original.apply(self, args)
         const ti = typeof args[1] === 'string' ? 1 : 2
@@ -229,6 +229,35 @@ function patchEmit(target: any): () => void {
         if (!handle(args[ti], args[di], forward)) return original.apply(self, args)
         return true
     })
+}
+
+function onResetSocket(args: any[]) {
+    if (!isBotSession()) return
+    const info = args[0] ?? {}
+    if (info.action === RESYNC_ACTION) return
+    const err = info.error ?? info
+    const where = String(err?.stack ?? '').split('\n').slice(1, 3).join(' | ').trim()
+    const msg = `소켓 리셋 (${info.action ?? '?'}): ${err?.message ?? String(err)}${where ? ` @ ${where}` : ''}`
+    saveSettings({ lastError: msg, lastErrorAt: Date.now() })
+    log('error', msg)
+}
+
+/** args를 직접 고친다 (before 훅이 같은 배열을 돌려줌) */
+function onClose(args: any[]) {
+    const wasPatched = identifyPatched
+    identifyPatched = false // 다음 연결은 다시 IDENTIFY 변환을 거쳐야 한다
+    if (!isBotSession()) return
+    const [, code, reason] = args
+    // 앱 시작 경합: 플러그인이 뜨기 전 "Bot xxx" 토큰이 그대로 나가 인증 실패(4004)가 나면
+    // 디스코드가 로그아웃해 버린다. 이 경우만 일반 오류(4000)로 바꿔 재접속시키면 이번엔 변환된 IDENTIFY가 나간다
+    if (code === 4004 && !wasPatched) {
+        args[1] = 4000
+        log('gateway', '플러그인 로드 전 접속이 거절됨(4004) → 로그아웃 대신 재접속')
+        return
+    }
+    const msg = `게이트웨이 종료 code=${code ?? '?'} ${reason ?? ''}`
+    if (code && code !== 1000) saveSettings({ lastError: msg, lastErrorAt: Date.now() })
+    log('error', msg)
 }
 
 export function installGateway(unpatches: Array<() => void>) {
@@ -253,35 +282,18 @@ export function installGateway(unpatches: Array<() => void>) {
         // 디스코드가 디스패치 처리 중 예외가 나면 소켓을 리셋하고 재접속한다. 그 예외와 종료 코드를 보이게 한다
         if (typeof s.resetSocketOnError === 'function') {
             unpatches.push(
-                before('resetSocketOnError', owner('resetSocketOnError'), (args: any[]) => {
-                    if (!isBotSession()) return
-                    const info = args[0] ?? {}
-                    if (info.action === RESYNC_ACTION) return
-                    const err = info.error ?? info
-                    const where = String(err?.stack ?? '').split('\n').slice(1, 3).join(' | ').trim()
-                    const msg = `소켓 리셋 (${info.action ?? '?'}): ${err?.message ?? String(err)}${where ? ` @ ${where}` : ''}`
-                    saveSettings({ lastError: msg, lastErrorAt: Date.now() })
-                    log('error', msg)
+                // Revenge 패처의 before 훅은 인자 배열을 반드시 돌려줘야 한다
+                before(owner('resetSocketOnError'), 'resetSocketOnError', (args: any[]) => {
+                    onResetSocket(args)
+                    return args
                 }),
             )
         }
         if (typeof s._handleClose === 'function') {
             unpatches.push(
-                before('_handleClose', owner('_handleClose'), (args: any[]) => {
-                    const wasPatched = identifyPatched
-                    identifyPatched = false // 다음 연결은 다시 IDENTIFY 변환을 거쳐야 한다
-                    if (!isBotSession()) return
-                    const [, code, reason] = args
-                    // 앱 시작 경합: 플러그인이 뜨기 전 "Bot xxx" 토큰이 그대로 나가 인증 실패(4004)가 나면
-                    // 디스코드가 로그아웃해 버린다. 이 경우만 일반 오류(4000)로 바꿔 재접속시키면 이번엔 변환된 IDENTIFY가 나간다
-                    if (code === 4004 && !wasPatched) {
-                        args[1] = 4000
-                        log('gateway', '플러그인 로드 전 접속이 거절됨(4004) → 로그아웃 대신 재접속')
-                        return args
-                    }
-                    const msg = `게이트웨이 종료 code=${code ?? '?'} ${reason ?? ''}`
-                    if (code && code !== 1000) saveSettings({ lastError: msg, lastErrorAt: Date.now() })
-                    log('error', msg)
+                before(owner('_handleClose'), '_handleClose', (args: any[]) => {
+                    onClose(args)
+                    return args
                 }),
             )
         }

@@ -1,5 +1,5 @@
-import { findByProps, findByStoreName } from '@vendetta/metro'
-import { constants } from '@vendetta/metro/common'
+import { Constants } from '@revenge-mod/discord/common/constants'
+import { byProps, getStore } from './modules'
 
 const API = 'https://discord.com/api/v9'
 
@@ -28,8 +28,8 @@ export function stickerUrl(s: StickerItem) {
 
 function token(): string | undefined {
     try {
-        const store = findByStoreName('AuthenticationStore')
-        const t = store?.getToken?.() ?? findByProps('getToken', 'setToken')?.getToken?.()
+        const store = getStore('AuthenticationStore')
+        const t = store?.getToken?.() ?? byProps('getToken', 'setToken')?.getToken?.()
         return typeof t === 'string' && t ? t : undefined
     } catch {
         return undefined
@@ -38,9 +38,9 @@ function token(): string | undefined {
 
 /** 스티커를 만들 권한이 있는 서버 목록 */
 export function uploadableGuilds(): Array<{ id: string; name: string }> {
-    const GuildStore = findByStoreName('GuildStore')
-    const PermissionStore = findByStoreName('PermissionStore')
-    const P = (constants as any)?.Permissions ?? {}
+    const GuildStore = getStore('GuildStore')
+    const PermissionStore = getStore('PermissionStore')
+    const P = (Constants as any)?.Permissions ?? byProps('Permissions', 'Fonts')?.Permissions ?? byProps('Permissions', 'ME')?.Permissions ?? {}
     const perms = [P.CREATE_GUILD_EXPRESSIONS, P.MANAGE_GUILD_EXPRESSIONS, P.MANAGE_EMOJIS_AND_STICKERS].filter(v => v != null)
     const guilds = Object.values(GuildStore?.getGuilds?.() ?? {}) as any[]
     return guilds
