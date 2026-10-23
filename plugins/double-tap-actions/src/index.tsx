@@ -1,10 +1,11 @@
 import { AlertActionCreators, ToastActionCreators } from '@revenge-mod/discord/actions'
 import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
+import { getModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
 import { getModules, lookupModule } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
-import { View } from 'react-native'
+import { Image, View } from 'react-native'
 
 /**
  * 내 메시지를 두 번 누르면 (기본: 반응 달기) 대신 가운데 작은 창으로 수정·삭제를 고르게 한다.
@@ -15,6 +16,9 @@ import { View } from 'react-native'
  */
 
 const D = () => Design as any
+const PREVIEW_PATH = 'modules/messages/native/long_press/LongPressMessageChatItemPreview.tsx'
+/** 디스코드가 길게 누를 때·삭제 확인창에서 쓰는 메시지 미리보기 (아바타·이름·시간·내용, 테마 색) */
+let ChatItemPreview: any
 let seq = 0
 const toast = (text: string) => {
     try {
@@ -79,19 +83,45 @@ async function remove(message: any, channel: any) {
     }
 }
 
+/** 디스코드 미리보기를 아직 못 불러왔을 때: 아바타 · 이름 · 내용 */
+function FallbackPreview({ message, channel }: { message: any; channel: any }) {
+    const { Text } = D()
+    const author = message?.author
+    let avatar: string | undefined
+    try {
+        avatar = author?.getAvatarURL?.(channel?.guild_id, 64)
+    } catch {}
+    const name = author?.globalName ?? author?.global_name ?? author?.username ?? ''
+    return (
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+            {avatar ? <Image source={{ uri: avatar }} style={{ width: 36, height: 36, borderRadius: 18 }} /> : null}
+            <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="text-md/semibold" color="text-strong" numberOfLines={1}>
+                    {name}
+                </Text>
+                <Text variant="text-md/normal" color="text-default" numberOfLines={6}>
+                    {previewOf(message)}
+                </Text>
+            </View>
+        </View>
+    )
+}
+
 function openActions(handlers: any, message: any, channel: any) {
     const { AlertModal, AlertActionButton, Text } = D()
     const editable = MESSAGE_TYPES_EDITABLE.has(message.type ?? 0) && message.state !== 'SEND_FAILED' && message.state !== 'SENDING'
     AlertActionCreators.openAlert(
         `double-tap-actions-${seq++}`,
         <AlertModal
-            title="내 메시지"
+            title="메시지"
             content={
-                <View style={{ gap: 4 }}>
-                    <Text variant="text-md/normal" color="text-muted" numberOfLines={4}>
-                        {previewOf(message)}
-                    </Text>
-                </View>
+                ChatItemPreview ? (
+                    <View style={{ marginTop: 4 }}>
+                        <ChatItemPreview message={message} />
+                    </View>
+                ) : (
+                    <FallbackPreview message={message} channel={channel} />
+                )
             }
             actions={
                 <>
@@ -126,6 +156,13 @@ function wrapInstance(inst: any) {
 
 export default plugin({
     start({ cleanup }: any) {
+        cleanup(
+            getModuleWithImportedPath(PREVIEW_PATH, (exports: any) => {
+                // 길게 누르기 메뉴를 한 번 열면 디스코드가 불러온다
+                const C = exports?.default ?? exports
+                if (typeof C === 'function' || (C && typeof C === 'object')) ChatItemPreview = C
+            }) as any,
+        )
         // 플러그인을 켜기 전에 열려 있던 채팅 화면은 이미 만들어진 MessagesHandlers 를 쓰므로,
         // 그 안에서 부르는 "기본 반응 달기" 함수도 가로챈다 (입력창 참조가 없어 키보드는 직접 열어야 함)
         cleanup(
