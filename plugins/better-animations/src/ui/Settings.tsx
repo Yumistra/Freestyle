@@ -24,8 +24,12 @@ interface ModuleInfo {
 let seq = 0
 
 const MODULES: Record<ModuleKey, ModuleInfo> = {
-    stack: { title: '설정·메뉴 화면', description: '설정, 서버 설정처럼 안쪽으로 들어가는 화면' },
-    push: { title: '큰 화면', description: '검색, 친구, 메시지 요청처럼 화면 전체가 바뀌는 곳 · 안드로이드 기본 전환 중에서만 고를 수 있어요', native: true },
+    stack: { title: '화면 전환', description: '설정 항목, 프로필, 검색처럼 안쪽으로 들어가는 화면이 나타나는 효과' },
+    push: {
+        title: '화면 전환 · 안드로이드 효과',
+        description: '화면을 나갈 때와 위 효과 아래에 같이 깔리는 안드로이드 기본 전환. 위 "화면 전환"을 고르면 여기 기본은 페이드가 돼요',
+        native: true,
+    },
     modal: { title: '모달 화면', description: '아래에서 올라오는 전체 화면 (사용자 설정 등) · 안드로이드 기본 전환 중에서만 고를 수 있어요', native: true },
     panel: {
         title: '채널 화면 밀기',

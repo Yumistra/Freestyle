@@ -27,7 +27,7 @@ export default plugin({
                 report(name, e)
             }
         }
-        tryPatch('screens', patchNativeScreens)
+        tryPatch('screens', () => patchNativeScreens(cleanup))
         tryPatch('stack', patchJsStack)
         tryPatch('sheets', patchSheets)
         tryPatch('worklets', () => patchWorklets(cleanup))
