@@ -87,7 +87,8 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
     const effect = effectOf(module, shown.effect)
 
     let body: any
-    if (module === 'stack' || module === 'push' || module === 'modal') {
+    const isScreen = module === 'stack' || module === 'push' || module === 'modal' || module === 'panel'
+    if (isScreen) {
         const layouts = { screen: { width: W, height: HEIGHT } }
         const interp = makeCardInterpolator(instant ? { id: 'none', label: '' } : effect)
         const top = interp({ current: { progress: p }, inverted: one, layouts })
@@ -103,6 +104,32 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
                     <FakeScreen title="55%" c={c} tone={c.raised} />
                 </Animated.View>
             </>
+        )
+    } else if (module === 'folder') {
+        // 서버 목록: 폴더 아이콘 아래로 서버 아이콘 셋이 나타난다
+        const size = 30
+        body = (
+            <View style={{ position: 'absolute', top: 10, bottom: 10, left: 14, width: 52, borderRadius: 26, backgroundColor: c.surface, alignItems: 'center', paddingTop: 10, gap: 8 }}>
+                <View style={{ width: size + 6, height: size + 6, borderRadius: 12, backgroundColor: c.brandSoft }} />
+                {[0, 1, 2].map(i => (
+                    <Animated.View key={i} style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: i === 1 ? c.brand : c.raised }, styleFrom(p, effect.hidden, W, HEIGHT, { edge: -(size + 8) })]} />
+                ))}
+            </View>
+        )
+    } else if (module === 'subtle') {
+        // 체크박스·라디오·스위치
+        body = (
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 28 }}>
+                <View style={{ width: 30, height: 30, borderRadius: 8, borderWidth: 2, borderColor: c.muted, alignItems: 'center', justifyContent: 'center' }}>
+                    <Animated.View style={[{ width: 30, height: 30, borderRadius: 8, backgroundColor: c.brand }, styleFrom(p, effect.hidden, W, HEIGHT)]} />
+                </View>
+                <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: c.muted, alignItems: 'center', justifyContent: 'center' }}>
+                    <Animated.View style={[{ width: 16, height: 16, borderRadius: 8, backgroundColor: c.brand }, styleFrom(p, effect.hidden, W, HEIGHT)]} />
+                </View>
+                <View style={{ width: 52, height: 30, borderRadius: 15, backgroundColor: c.raised, justifyContent: 'center', paddingHorizontal: 3 }}>
+                    <Animated.View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: c.brand, transform: [{ translateX: lerp(p, 0, 22) }] }} />
+                </View>
+            </View>
         )
     } else if (module === 'sheet') {
         body = (
@@ -167,7 +194,7 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
     return (
         <View
             onLayout={e => setW(Math.round(e.nativeEvent.layout.width))}
-            style={{ height: HEIGHT, borderRadius: 14, overflow: 'hidden', backgroundColor: module === 'stack' || module === 'push' || module === 'modal' ? c.surface : c.base }}
+            style={{ height: HEIGHT, borderRadius: 14, overflow: 'hidden', backgroundColor: isScreen ? c.surface : c.base }}
         >
             {(module === 'sheet' || module === 'alert' || module === 'toast' || module === 'menu') && (
                 <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, padding: 14 }}>

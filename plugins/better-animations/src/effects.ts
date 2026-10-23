@@ -6,7 +6,7 @@
  * 화면 전환은 아래에 깔리는 화면이 어떻게 변하는지(under)와 어둡게 덮는 정도(dim)도 적을 수 있다.
  */
 
-export type ModuleKey = 'stack' | 'push' | 'modal' | 'sheet' | 'menu' | 'alert' | 'toast'
+export type ModuleKey = 'stack' | 'push' | 'modal' | 'panel' | 'sheet' | 'menu' | 'alert' | 'toast' | 'folder' | 'subtle'
 
 export interface Hidden {
     /** 투명도 */
@@ -121,7 +121,34 @@ export const TOAST_EFFECTS: Effect[] = [
     { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
 ]
 
+// ── 채널 화면 밀기 (채널 목록 ↔ 채팅) ──────────────────────────────
+export const PANEL_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본' },
+    { id: 'custom', label: '직접 설정', hidden: { txW: 0.82 } },
+]
+
+// ── 서버 폴더 열고 닫기 ──────────────────────────────────────────
+export const FOLDER_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본' },
+    { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, s: 0.5 } },
+    { id: 'slide', label: '밀려나오기', hidden: { o: 0, edge: true } },
+    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
+    { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'side', label: '옆에서', hidden: { o: 0, tx: -48 } },
+    { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
+    { id: 'rotate', label: '회전', hidden: { o: 0, r: -120, s: 0.3 } },
+]
+
+// ── 작은 움직임 (체크박스·라디오·버튼 등 디스코드 공통 스프링) ─────────────
+export const SUBTLE_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본' },
+    { id: 'custom', label: '직접 설정', hidden: { o: 0, s: 0.5 } },
+]
+
 export const EFFECTS: Record<ModuleKey, Effect[]> = {
+    panel: PANEL_EFFECTS,
+    folder: FOLDER_EFFECTS,
+    subtle: SUBTLE_EFFECTS,
     stack: STACK_EFFECTS,
     push: NATIVE_EFFECTS,
     modal: NATIVE_EFFECTS,
@@ -142,6 +169,9 @@ export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: numb
     menu: { effect: 'corner', duration: 250, easing: 'out' },
     alert: { effect: 'zoom', duration: 400, easing: 'spring' },
     toast: { effect: 'slide', duration: 250, easing: 'linear' },
+    panel: { effect: 'custom', duration: 250, easing: 'out' },
+    folder: { effect: 'drop', duration: 350, easing: 'smooth' },
+    subtle: { effect: 'custom', duration: 220, easing: 'smooth' },
 }
 
 // ── 움직임(가속 곡선) ────────────────────────────────────────────
@@ -157,6 +187,22 @@ export const EASINGS: Array<{ id: EasingKey; label: string }> = [
     { id: 'bounce', label: '통통' },
     { id: 'elastic', label: '고무줄' },
 ]
+
+/** 스프링만 쓸 수 있는 곳에서 고른 움직임을 감쇠비로 바꾼다 (작을수록 출렁임) */
+export function zetaOf(key: EasingKey) {
+    switch (key) {
+        case 'spring':
+            return 0.55
+        case 'back':
+            return 0.7
+        case 'bounce':
+            return 0.35
+        case 'elastic':
+            return 0.22
+        default:
+            return 1
+    }
+}
 
 /** Easing 모듈(react-native 또는 reanimated)로 곡선 함수를 만든다. 두 라이브러리 API가 같다 */
 export function easingFrom(E: any, key: EasingKey) {

@@ -1,3 +1,4 @@
+import { patchConstants } from './patches/constants'
 import { patchNativeScreens } from './patches/screens'
 import { patchSheets } from './patches/sheets'
 import { patchJsStack } from './patches/stack'
@@ -10,7 +11,8 @@ import SettingsPage from './ui/Settings'
  *  - 큰 화면·모달: react-native-screens 네이티브 전환 종류 바꾸기
  *  - 설정·메뉴 화면: @react-navigation/stack 카드 전환을 직접 만든 효과로
  *  - 아래 창: @gorhom/bottom-sheet 의 열고 닫는 움직임
- *  - 팝업 메뉴·확인창·토스트: Reanimated 워클릿을 우리 워클릿으로 바꿔 넣기
+ *  - 팝업 메뉴·확인창·토스트·서버 폴더: Reanimated 워클릿을 우리 워클릿으로 바꿔 넣기
+ *  - 채널 화면 밀기·작은 움직임·폴더 펼침: 디스코드 애니메이션 상수 바꾸기
  * 각 부분은 따로 실패해도 나머지는 동작하게 한다.
  */
 export default plugin({
@@ -29,6 +31,7 @@ export default plugin({
         tryPatch('stack', patchJsStack)
         tryPatch('sheets', patchSheets)
         tryPatch('worklets', () => patchWorklets(cleanup))
+        tryPatch('constants', () => patchConstants(cleanup))
     },
     SettingsComponent: SettingsPage,
 } as any)

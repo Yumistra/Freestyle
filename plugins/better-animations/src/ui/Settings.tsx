@@ -14,6 +14,10 @@ interface ModuleInfo {
     description: string
     /** 네이티브 전환이라 속도·움직임을 못 바꿈 */
     native?: boolean
+    /** 고를 수 있는 움직임 (없으면 전부) */
+    easings?: EasingKey[]
+    /** 바꾼 뒤 앱을 다시 시작해야 확실히 적용됨 */
+    restart?: boolean
     test?: () => void
 }
 
@@ -23,6 +27,17 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
     stack: { title: '설정·메뉴 화면', description: '설정, 서버 설정처럼 안쪽으로 들어가는 화면' },
     push: { title: '큰 화면', description: '검색, 친구, 메시지 요청처럼 화면 전체가 바뀌는 곳 · 안드로이드 기본 전환 중에서만 고를 수 있어요', native: true },
     modal: { title: '모달 화면', description: '아래에서 올라오는 전체 화면 (사용자 설정 등) · 안드로이드 기본 전환 중에서만 고를 수 있어요', native: true },
+    panel: {
+        title: '채널 화면 밀기',
+        description: '채널 목록 ↔ 채팅 화면이 옆으로 밀려 나오고 들어가는 움직임',
+        restart: true,
+    },
+    folder: { title: '서버 폴더', description: '서버 목록에서 폴더를 열고 닫을 때 서버 아이콘이 나타나는 모습과 펼쳐지는 속도' },
+    subtle: {
+        title: '작은 움직임',
+        description: '체크박스, 라디오 버튼, 버튼처럼 디스코드 곳곳의 작은 움직임 (같은 스프링을 함께 씀)',
+        easings: ['smooth', 'spring', 'back', 'bounce', 'elastic'],
+    },
     sheet: { title: '아래 창', description: '메시지나 사용자를 길게 눌렀을 때 뜨는 창' },
     menu: { title: '팝업 메뉴', description: '⋯ 버튼을 눌렀을 때 뜨는 작은 메뉴' },
     alert: {
@@ -166,8 +181,13 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                     {showSpeed && (
                         <View style={{ gap: 8 }}>
                             <Label>움직임</Label>
-                            <Chips items={EASINGS} value={value.easing} onChange={(easing: EasingKey) => onChange({ ...value, easing })} />
+                            <Chips items={info.easings ? EASINGS.filter(e => info.easings!.includes(e.id)) : EASINGS} value={value.easing} onChange={(easing: EasingKey) => onChange({ ...value, easing })} />
                         </View>
+                    )}
+                    {info.restart && value.effect !== 'default' && (
+                        <Text variant="text-xs/normal" color="text-muted">
+                            이 항목은 바꾼 뒤 앱을 완전히 껐다 켜야 확실히 적용돼요.
+                        </Text>
                     )}
                     {info.test && enabled && <Button text="실제로 띄워 보기" variant="secondary" size="sm" onPress={info.test} />}
                 </View>
@@ -189,6 +209,8 @@ function StatusRows() {
         ['팝업 메뉴', `${status.menus}회`],
         ['확인창', `${status.alerts}회`],
         ['토스트', `${status.toasts}회`],
+        ['서버 폴더', `${status.folders}회`],
+        ['디스코드 상수', status.constants.length ? status.constants.join(', ') : '아직 못 찾음'],
     ]
     if (status.lastError) rows.push(['마지막 오류', status.lastError])
     return (

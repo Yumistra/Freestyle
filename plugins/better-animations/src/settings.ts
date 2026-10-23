@@ -12,7 +12,7 @@ export interface Settings {
     modules: Record<ModuleKey, ModuleSettings>
 }
 
-export const MODULE_KEYS: ModuleKey[] = ['stack', 'push', 'modal', 'sheet', 'menu', 'alert', 'toast']
+export const MODULE_KEYS: ModuleKey[] = ['stack', 'push', 'modal', 'panel', 'sheet', 'menu', 'alert', 'toast', 'folder', 'subtle']
 
 export const DEFAULTS: Settings = {
     enabled: true,
@@ -24,6 +24,9 @@ export const DEFAULTS: Settings = {
         menu: { effect: 'pop', duration: 300, easing: 'back' },
         alert: { effect: 'zoom', duration: 380, easing: 'spring' },
         toast: { effect: 'slide', duration: 380, easing: 'back' },
+        panel: { effect: 'default', duration: 260, easing: 'expo' },
+        folder: { effect: 'drop', duration: 380, easing: 'spring' },
+        subtle: { effect: 'default', duration: 260, easing: 'spring' },
     },
 }
 
@@ -53,9 +56,23 @@ export function active(key: ModuleKey): ModuleSettings | undefined {
     return m.effect === DEFAULT_ID ? undefined : m
 }
 
+const listeners = new Set<() => void>()
+/** 설정이 바뀌면 부를 함수 (상수 바꿔치기처럼 미리 적용해 둬야 하는 것들) */
+export function onSettingsChange(fn: () => void) {
+    listeners.add(fn)
+    return () => listeners.delete(fn)
+}
+
 export async function save(next: Settings) {
     version++
     await storage?.set(next, true)
+    for (const fn of listeners) {
+        try {
+            fn()
+        } catch (e) {
+            report('listener', e)
+        }
+    }
 }
 
 /** 작동 확인용 숫자 */
@@ -66,6 +83,8 @@ export const status = {
     menus: 0,
     alerts: 0,
     toasts: 0,
+    folders: 0,
+    constants: [] as string[],
     found: {} as Record<string, boolean>,
     lastError: '',
 }

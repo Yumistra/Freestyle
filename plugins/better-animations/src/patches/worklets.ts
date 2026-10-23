@@ -126,11 +126,21 @@ const MENU =
 
 const MENU_BACKDROP = 'function BetterAnimationsContextMenuBackdrop(){var c=this.__closure;' + HELPERS + 'return{opacity:T(c.visible.get(),BA.fade)};}'
 
-export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP }
+const FOLDER =
+    'function BetterAnimationsGuildFolderItem(){var c=this.__closure;' +
+    HELPERS +
+    'var on=c.visible.get()===1;var dir=c.fromTop?-1:1;' +
+    'var tx=h.tx+h.txW*BA.W;var ty=(h.edge?dir*c.guildItemSize:0)+dir*h.ty;' +
+    'var t=[{perspective:600},{translateX:go(on?0:tx)},{translateY:go(on?0:ty)},{scale:go(on?1:h.s)}];' +
+    "if(h.r){t.push({rotate:go(on?'0deg':h.r+'deg')});}" +
+    "if(h.rx){t.push({rotateX:go(on?'0deg':h.rx+'deg')});}" +
+    'return{opacity:T(on?1:h.o,BA.fade,function(finished){if(finished&&c.state===c.TransitionStates.YEETED){c.runOnJS(c.cleanUp)();}}),transform:t};}'
+
+export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER }
 
 // ── 디스코드 워클릿 알아보기 ─────────────────────────────────────
 
-type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop'
+type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder'
 
 const has = (c: object, ...keys: string[]) => keys.every(k => k in c)
 
@@ -144,11 +154,12 @@ export function kindOf(closure: any): Kind | undefined {
     if (has(closure, 'toastHeight', 'enterDelayMs', 'ANIMATION_STATE_INPUT', 'animationState', 'withDelay')) return 'toast'
     if (has(closure, 'CONTEXT_MENU_MIN_SCALE', 'positionX', 'positionY', 'visible', 'cleanUp')) return 'menu'
     if (has(closure, 'CONTEXT_MENU_SPRING', 'visible') && Object.keys(closure).length <= 4) return 'menuBackdrop'
+    if (has(closure, 'FOLDER_SPRING_PHYSICS', 'fromTop', 'guildItemSize', 'visible', 'cleanUp')) return 'folder'
 }
 
-const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu' }
-const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP }
-const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus' }
+const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder' }
+const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER }
+const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders' }
 
 // ── 설정 → 워클릿에 넘길 값 ─────────────────────────────────────
 
