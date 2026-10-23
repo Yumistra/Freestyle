@@ -140,7 +140,8 @@ function openActions(handlers: any, message: any, channel: any) {
             title="메시지"
             content={
                 ChatItemPreview ? (
-                    <View style={{ marginTop: 4 }}>
+                    // 네이티브 메시지 뷰는 너비가 정해져야 글자를 그린다 (가운데 정렬 부모 안에서 너비 0이 되면 빈칸)
+                    <View style={{ alignSelf: 'stretch', width: '100%', minWidth: 240, marginTop: 4 }}>
                         <ChatItemPreview message={message} />
                     </View>
                 ) : (

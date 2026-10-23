@@ -5,7 +5,7 @@
 	"description": "내 메시지를 두 번 누르면 반응 대신 수정·삭제 창이 떠요. 테마 색을 그대로 따라갑니다.",
 	"author": "Yumistra",
 	"icon": "PencilIcon",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}
