@@ -6,6 +6,7 @@
 | Steal Sticker | `yumistra.steal-sticker` | 스티커 창에 Add to Server / Copy URL / Save image 버튼 추가 |
 | Plugin Backup | `yumistra.plugin-backup` | 플러그인·저장소·켜짐 상태·설정·데이터 파일(폰트·배경 등)을 백업하고 다시 불러오기 |
 | Overlay Background | `yumistra.overlay-background` | 포럼·스레드처럼 채팅 위에 덮이는 화면에도 테마 배경 이미지 표시 |
+| Toast Fix | `yumistra.toast-fix` | 옛날(Vendetta) 방식 알림을 띄우는 플러그인 때문에 앱이 튕기는 문제(`position` of undefined) 방지 |
 
 ## 설치
 
