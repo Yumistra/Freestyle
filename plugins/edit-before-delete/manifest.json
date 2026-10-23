@@ -1,0 +1,16 @@
+{
+	"format": 1,
+	"id": "yumistra.edit-before-delete",
+	"name": "Edit Before Delete",
+	"description": "내 메시지를 삭제하면 먼저 \"** **\"(빈 메시지)로 수정한 다음 삭제합니다.",
+	"author": "Yumistra",
+	"icon": "TrashIcon",
+	"version": "1.0.0",
+	"dependencies": {
+		"revenge.api": {},
+		"discord": {}
+	},
+	"dist": {
+		"script": "index.js"
+	}
+}

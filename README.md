@@ -10,6 +10,7 @@
 | Better Animations | `yumistra.better-animations` | 화면 전환·채널 화면 밀기·아래 창·팝업 메뉴·확인창·토스트·서버 폴더·작은 움직임 애니메이션을 골라서 바꾸기 (BetterDiscord BetterAnimations 모바일판) |
 | Silent Leave | `yumistra.silent-leave` | 그룹 DM에서 `/leave-silent` 로 알림 없이 조용히 나가기 |
 | Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 두 번 누르면 반응 대신 수정·삭제 창 (테마 색 따라감) |
+| Edit Before Delete | `yumistra.edit-before-delete` | 내 메시지를 지울 때 먼저 `** **`로 수정한 뒤 삭제 |
 
 ## 설치
 
