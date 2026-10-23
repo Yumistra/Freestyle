@@ -1,0 +1,34 @@
+import { patchNativeScreens } from './patches/screens'
+import { patchSheets } from './patches/sheets'
+import { patchJsStack } from './patches/stack'
+import { patchWorklets } from './patches/worklets'
+import { bindStorage, DEFAULTS, report } from './settings'
+import SettingsPage from './ui/Settings'
+
+/**
+ * Better Animations (모바일판)
+ *  - 큰 화면·모달: react-native-screens 네이티브 전환 종류 바꾸기
+ *  - 설정·메뉴 화면: @react-navigation/stack 카드 전환을 직접 만든 효과로
+ *  - 아래 창: @gorhom/bottom-sheet 의 열고 닫는 움직임
+ *  - 팝업 메뉴·확인창·토스트: Reanimated 워클릿을 우리 워클릿으로 바꿔 넣기
+ * 각 부분은 따로 실패해도 나머지는 동작하게 한다.
+ */
+export default plugin({
+    jsonStorage: { load: true, default: DEFAULTS },
+    start({ cleanup, jsonStorage }: any) {
+        bindStorage(jsonStorage)
+        const tryPatch = (name: string, fn: () => any) => {
+            try {
+                const undo = fn()
+                if (typeof undo === 'function') cleanup(undo)
+            } catch (e) {
+                report(name, e)
+            }
+        }
+        tryPatch('screens', patchNativeScreens)
+        tryPatch('stack', patchJsStack)
+        tryPatch('sheets', patchSheets)
+        tryPatch('worklets', () => patchWorklets(cleanup))
+    },
+    SettingsComponent: SettingsPage,
+} as any)

@@ -1,0 +1,16 @@
+{
+	"format": 1,
+	"id": "yumistra.better-animations",
+	"name": "Better Animations",
+	"description": "화면 전환, 아래 창, 팝업 메뉴, 확인창, 토스트 알림의 애니메이션을 고르고 속도·움직임을 바꿉니다. BetterDiscord의 BetterAnimations를 모바일에 맞게 옮겼습니다.",
+	"author": "Yumistra",
+	"icon": "MagicWandIcon",
+	"version": "1.0.0",
+	"dependencies": {
+		"revenge.api": {},
+		"discord": {}
+	},
+	"dist": {
+		"script": "index.js"
+	}
+}
