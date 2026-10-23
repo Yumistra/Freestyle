@@ -8,6 +8,7 @@
 | Overlay Background | `yumistra.overlay-background` | 포럼·스레드처럼 채팅 위에 덮이는 화면에도 테마 배경 이미지 표시 |
 | Toast Fix | `yumistra.toast-fix` | 옛날(Vendetta) 방식 알림을 띄우는 플러그인 때문에 앱이 튕기는 문제(`position` of undefined) 방지 |
 | Better Animations | `yumistra.better-animations` | 화면 전환·채널 화면 밀기·아래 창·팝업 메뉴·확인창·토스트·서버 폴더·작은 움직임 애니메이션을 골라서 바꾸기 (BetterDiscord BetterAnimations 모바일판) |
+| Silent Leave | `yumistra.silent-leave` | 그룹 DM에서 `/leave-silent` 로 알림 없이 조용히 나가기 |
 
 ## 설치
 

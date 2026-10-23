@@ -1,0 +1,16 @@
+{
+	"format": 1,
+	"id": "yumistra.silent-leave",
+	"name": "Silent Leave",
+	"description": "그룹 DM에서 /leave-silent 로 나가기 알림 없이 조용히 나갑니다.",
+	"author": "Yumistra",
+	"icon": "DoorExitIcon",
+	"version": "1.0.0",
+	"dependencies": {
+		"revenge.api": {},
+		"discord": {}
+	},
+	"dist": {
+		"script": "index.js"
+	}
+}
