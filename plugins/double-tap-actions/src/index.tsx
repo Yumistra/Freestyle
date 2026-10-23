@@ -1,9 +1,9 @@
 import { AlertActionCreators, ToastActionCreators } from '@revenge-mod/discord/actions'
 import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
-import { getModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
+import { getModuleWithImportedPath, lookupModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
 import { getModules, lookupModule } from '@revenge-mod/modules/finders'
-import { withProps } from '@revenge-mod/modules/finders/filters'
+import { withDependencies, withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { Image, View } from 'react-native'
 
@@ -19,6 +19,29 @@ const D = () => Design as any
 const PREVIEW_PATH = 'modules/messages/native/long_press/LongPressMessageChatItemPreview.tsx'
 /** 디스코드가 길게 누를 때·삭제 확인창에서 쓰는 메시지 미리보기 (아바타·이름·시간·내용, 테마 색) */
 let ChatItemPreview: any
+
+const PREVIEW_NAME = 'LongPressMessageChatItemPreview'
+// Discord 350.8 에서 이 모듈이 가져오는 모듈 번호들. 아직 안 불러왔으면 이걸로 찾아서 직접 불러온다
+const PREVIEW_DEPS_350 = [21, 5092, 587, 7742, 558, 576, 9369, 2]
+
+function usePreviewExports(exports: any) {
+    const C = exports?.default ?? exports
+    if (C && (typeof C === 'function' || typeof C === 'object')) ChatItemPreview = C
+}
+
+/** 미리보기 컴포넌트를 확실히 준비한다 (디스코드가 아직 안 불러왔으면 직접 불러옴) */
+function loadPreview() {
+    if (ChatItemPreview) return
+    try {
+        const [exports] = lookupModuleWithImportedPath(PREVIEW_PATH) as any
+        if (exports) return usePreviewExports(exports)
+    } catch {}
+    try {
+        const [exports] = lookupModule(withDependencies(PREVIEW_DEPS_350) as any) as any
+        const C = exports?.default
+        if (typeof C === 'function' && C.name === PREVIEW_NAME) ChatItemPreview = C
+    } catch {}
+}
 let seq = 0
 const toast = (text: string) => {
     try {
@@ -108,6 +131,7 @@ function FallbackPreview({ message, channel }: { message: any; channel: any }) {
 }
 
 function openActions(handlers: any, message: any, channel: any) {
+    loadPreview()
     const { AlertModal, AlertActionButton, Text } = D()
     const editable = MESSAGE_TYPES_EDITABLE.has(message.type ?? 0) && message.state !== 'SEND_FAILED' && message.state !== 'SENDING'
     AlertActionCreators.openAlert(
@@ -157,11 +181,7 @@ function wrapInstance(inst: any) {
 export default plugin({
     start({ cleanup }: any) {
         cleanup(
-            getModuleWithImportedPath(PREVIEW_PATH, (exports: any) => {
-                // 길게 누르기 메뉴를 한 번 열면 디스코드가 불러온다
-                const C = exports?.default ?? exports
-                if (typeof C === 'function' || (C && typeof C === 'object')) ChatItemPreview = C
-            }) as any,
+            getModuleWithImportedPath(PREVIEW_PATH, (exports: any) => usePreviewExports(exports)) as any,
         )
         // 플러그인을 켜기 전에 열려 있던 채팅 화면은 이미 만들어진 MessagesHandlers 를 쓰므로,
         // 그 안에서 부르는 "기본 반응 달기" 함수도 가로챈다 (입력창 참조가 없어 키보드는 직접 열어야 함)
