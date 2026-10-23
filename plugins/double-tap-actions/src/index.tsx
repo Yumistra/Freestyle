@@ -3,6 +3,7 @@ import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
 import { getModules, lookupModule } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
+import { instead } from '@revenge-mod/patcher'
 import { View } from 'react-native'
 
 /**
@@ -125,6 +126,24 @@ function wrapInstance(inst: any) {
 
 export default plugin({
     start({ cleanup }: any) {
+        // 플러그인을 켜기 전에 열려 있던 채팅 화면은 이미 만들어진 MessagesHandlers 를 쓰므로,
+        // 그 안에서 부르는 "기본 반응 달기" 함수도 가로챈다 (입력창 참조가 없어 키보드는 직접 열어야 함)
+        cleanup(
+            getModules(withProps('handleAddDefaultDoubleTapReaction') as any, (mod: any) => {
+                cleanup(
+                    instead(mod, 'handleAddDefaultDoubleTapReaction', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        try {
+                            const [message, channel] = args
+                            if (message && channel && isMine(message)) {
+                                openActions(undefined, message, channel)
+                                return
+                            }
+                        } catch {}
+                        return orig.apply(this, args)
+                    }),
+                )
+            }) as any,
+        )
         cleanup(
             getModules(withProps('MessagesHandlers') as any, (mod: any) => {
                 const Orig = mod?.MessagesHandlers
