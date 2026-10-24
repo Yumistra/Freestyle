@@ -2,14 +2,14 @@
 
 채팅에서 메시지가 나타날 때 애니메이션을 넣는 플러그인입니다. 채널을 열 때 보이는 메시지, 스크롤해서 새로 보이는 메시지, 새로 온 메시지에 적용됩니다.
 
-안드로이드 디스코드의 채팅 목록은 JS 가 아니라 네이티브 `RecyclerView`(`ChatListView`)라서, 이 플러그인에는 Kotlin 부분(`plugin.jar`)이 있습니다. 그래서 다른 Freestyle 플러그인처럼 자동으로 빌드되지 않고, 아래처럼 직접 빌드해야 합니다.
+안드로이드 디스코드의 채팅 목록은 JS 가 아니라 네이티브 `RecyclerView`(`ChatListView`)라서, 이 플러그인에는 Kotlin 부분(`plugin.jar`)이 있습니다. Freestyle 의 GitHub Actions 가 `scripts/build-native.sh` 로 함께 빌드해서 저장소에 올리므로, 보통은 **저장소에서 바로 설치**하면 됩니다. 설치하거나 업데이트한 뒤에는 디스코드를 완전히 껐다 켜세요.
 
 - `src/main/kotlin/…/MessageAnimationsPlugin.kt`: 네이티브 부분. `RecyclerView.dispatchChildAttached` 를 후킹해 채팅 줄이 붙을 때 애니메이션을 재생합니다.
 - `js/index.tsx`: 설정 화면(효과·속도·움직임·간격 + 미리보기). 저장하면 네이티브에 바로 다시 읽으라고 알립니다.
 - 효과: 떠오르기, 페이드, 오른쪽에서, 왼쪽에서, 확대, 톡, 떨어지기, 플립, 없음
 - 움직임: 감속, 빠르게, 부드럽게, 일정하게, 살짝 튕김, 스프링, 통통, 고무줄
 
-## 빌드 (PC 에서)
+## 직접 빌드 (PC, 선택)
 
 ### 1. 준비물
 

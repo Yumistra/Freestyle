@@ -11,12 +11,7 @@
 | Silent Leave | `yumistra.silent-leave` | 그룹 DM에서 `/leave-silent` 로 알림 없이 조용히 나가기 |
 | Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 두 번 누르면 반응 대신 수정·삭제 창 (테마 색 따라감) |
 | Edit Before Delete | `yumistra.edit-before-delete` | 내 메시지를 지울 때 먼저 `** **`로 수정한 뒤 삭제 |
-
-`native/` 폴더의 플러그인은 Kotlin 부분이 있어서 저장소에 자동으로 올라가지 않아요. 각 폴더의 README 대로 직접 빌드해서 파일로 설치하세요.
-
-| 플러그인 (직접 빌드) | ID | 설명 |
-| --- | --- | --- |
-| Message Animations | `yumistra.message-animations` | 채팅에서 메시지가 나타날 때 애니메이션 (떠오르기·페이드·확대·플립 등) |
+| Message Animations | `yumistra.message-animations` | 채팅에서 메시지가 나타날 때 애니메이션 (떠오르기·페이드·확대·플립 등). 네이티브 부분이 있어서 설치 후 앱을 다시 시작해야 함 |
 
 ## 설치
 
@@ -33,6 +28,7 @@ ZIP 파일을 직접 받았다면 같은 화면의 **Install from file**로 설�
 - `plugins/<이름>/manifest.json`: Revenge Next 매니페스트 (format 1). 업데이트를 내보내려면 `version`을 올리세요.
 - `plugins/<이름>/src/`: 소스. `@revenge-mod/*`, `react`, `react-native` import는 빌드할 때 `revenge.*` 전역 접근으로 바뀝니다.
 - `scripts/build.mjs`: 플러그인 JS 빌드 → `plugins/<이름>/build/js/index.js`
+- `scripts/build-native.sh`: `src/main` 이 있는 플러그인의 Kotlin 부분 → `plugins/<이름>/build/plugin.jar` (GitHub Actions 에서 실행)
 - `scripts/package.mjs`: `dist/pool/<id>@<version>.zip` + `dist/index.json` 생성
 - `legacy/`: 옛 Vendetta/Bunny 형식 플러그인 (Revenge Next에서는 동작하지 않음, 빌드하지 않음)
 

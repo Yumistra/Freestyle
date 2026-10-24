@@ -31,6 +31,16 @@ for (const name of readdirSync('plugins')) {
     const zip = new JSZip()
     const date = new Date('2020-01-01T00:00:00Z')
     zip.file('manifest.json', raw, { date })
+    // 네이티브 부분 (scripts/build-native.sh 결과). 빌드에 실패했으면 이 플러그인만 빼고 계속한다
+    const android = manifest.dist?.android
+    if (android?.path) {
+        const jar = `${dir}/build/plugin.jar`
+        if (!existsSync(jar)) {
+            console.warn(`! ${name}: ${jar} 없음. 네이티브 빌드가 안 돼서 건너뜀`)
+            continue
+        }
+        zip.file(android.path, readFileSync(jar), { date })
+    }
     const script = manifest.dist?.script
     if (script) {
         const built = `${dir}/build/js/index.js`
