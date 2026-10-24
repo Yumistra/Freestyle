@@ -2,18 +2,25 @@
 
 package io.github.yumistra.doubletapactions
 
+import android.animation.ValueAnimator
+import android.content.Context
+import android.content.res.AssetManager
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
+import android.view.ViewTreeObserver
+import android.view.animation.LinearInterpolator
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupWindow
 import android.widget.TextView
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
@@ -25,22 +32,91 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.lang.ref.WeakReference
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.util.WeakHashMap
 import kotlin.coroutines.resume
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * Double Tap Actions 의 네이티브 부분: 메시지 바로 밑에 버튼 띄우기.
+ * Double Tap Actions 의 네이티브 부분: 메시지 바로 밑에 디스코드 버튼 줄 끼워 넣기.
  *
- * 채팅 목록(ChatListView)은 네이티브라 JS 는 "어느 메시지인지"만 안다.
- * 그래서 목록에서 손가락이 닿은 줄을 기억해 두었다가 (두 번 누르기·당기기 모두 그 줄에서 시작한다),
- * JS 가 showActions 를 부르면 그 줄 밑에 버튼 줄을 띄우고, 누른 버튼의 id 를 돌려준다.
+ * 채팅 목록(ChatListView, RecyclerView)은 네이티브라 JS 는 "어느 메시지인지"만 안다.
+ * 손가락이 닿은 줄을 기억해 두었다가, JS 가 showActions 를 부르면
+ *  - 그 줄 아래에 빈 자리를 만들어 밑의 메시지를 민다 (RecyclerView 의 장식 여백 = getItemDecorInsetsForChild)
+ *  - 그 자리에 디스코드 버튼(크기·글꼴·색·눌림 애니메이션을 디스코드와 같게)을 그린다 (RecyclerView 오버레이)
+ *  - 누른 버튼의 id 를 돌려준다.
+ * 앱의 androidx 클래스는 상속할 수 없어서(플러그인 로더가 달라서) 인터페이스는 Proxy, 나머지는 리플렉션으로 쓴다.
  */
 
 private const val RECYCLER_VIEW = "androidx.recyclerview.widget.RecyclerView"
 private const val CHAT_LIST_VIEW = "com.discord.chat.presentation.list.ChatListView"
+private const val ACCESSORIES_VIEW = "com.discord.chat.presentation.message.MessageAccessoriesView"
+private const val ITEM_TOUCH_LISTENER = "androidx.recyclerview.widget.RecyclerView\$OnItemTouchListener"
+private const val FONT_MANAGER = "com.facebook.react.common.assets.ReactFontManager"
 /** 이보다 오래전에 닿은 줄은 쓰지 않는다 */
 private const val TOUCH_TTL = 4000L
 
-private class Touched(val row: WeakReference<View>, val at: Long)
+// 디스코드 버튼 (design/components/Button/native/ButtonConstants: sm)
+private const val BUTTON_HEIGHT = 32f
+private const val BUTTON_PADDING_H = 12f
+private const val BUTTON_ICON = 16f
+private const val BUTTON_ICON_GAP = 6f
+private const val BUTTON_BORDER = 1f
+/** 눌렀을 때 줄어드는 양 (PressableScale 의 scaleAmountInPx 기본값) */
+private const val PRESS_SHRINK_PX = 8f
+private const val BUTTON_GAP = 8f
+private const val ROW_TOP = 4f
+private const val ROW_BOTTOM = 8f
+
+/** 디스코드 스프링 (design/animation/reanimated/spring/springPresets) */
+private class Spring(val mass: Double, val stiffness: Double, val damping: Double, val clamp: Boolean) {
+    private val w0 = sqrt(stiffness / mass)
+    private val zeta = damping / (2 * sqrt(stiffness * mass))
+
+    /** 0 에서 출발해 1 로 가는 위치 */
+    fun at(t: Double): Double {
+        val x = if (zeta < 1) {
+            val wd = w0 * sqrt(1 - zeta * zeta)
+            1 - exp(-zeta * w0 * t) * (cos(wd * t) + zeta * w0 / wd * sin(wd * t))
+        } else {
+            1 - exp(-w0 * t) * (1 + w0 * t)
+        }
+        return if (clamp) min(1.0, x) else x
+    }
+
+    /** 거의 멈출 때까지 (ms) */
+    val settleMs: Long = ((ln(1000.0) / (min(zeta, 1.0) * w0)) * 1000).toLong().coerceIn(120L, 1500L)
+}
+
+private val SPRING_STANDARD = Spring(0.35, 250.0, 13.0, true)
+private val ON_PRESS_SPRING = Spring(1.0, 300.0, 27.0, true)
+
+private fun animateSpring(spring: Spring, onUpdate: (Float) -> Unit, onEnd: () -> Unit = {}): ValueAnimator {
+    val a = ValueAnimator.ofFloat(0f, 1f)
+    a.duration = spring.settleMs
+    a.interpolator = LinearInterpolator()
+    var ended = false
+    a.addUpdateListener {
+        val t = it.animatedFraction * spring.settleMs / 1000.0
+        onUpdate(if (it.animatedFraction >= 1f) 1f else spring.at(t).toFloat())
+        if (it.animatedFraction >= 1f && !ended) {
+            ended = true
+            onEnd()
+        }
+    }
+    a.start()
+    return a
+}
 
 private fun color(value: String?, fallback: Int): Int = try {
     if (value.isNullOrEmpty()) fallback else Color.parseColor(value)
@@ -48,7 +124,12 @@ private fun color(value: String?, fallback: Int): Int = try {
     fallback
 }
 
-/** 손가락 아래의 줄 (이동 중인 줄도 그 위치로) */
+private fun mix(a: Int, b: Int, t: Float): Int {
+    fun ch(s: Int) = (((a shr s) and 0xff) + (((b shr s) and 0xff) - ((a shr s) and 0xff)) * t).roundToInt().coerceIn(0, 255)
+    return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+}
+
+/** 손가락 아래의 줄 */
 private fun childUnder(parent: ViewGroup, x: Float, y: Float): View? {
     for (i in parent.childCount - 1 downTo 0) {
         val c = parent.getChildAt(i)
@@ -59,18 +140,494 @@ private fun childUnder(parent: ViewGroup, x: Float, y: Float): View? {
     return null
 }
 
+private class Colors(val bg: Int, val bgActive: Int, val border: Int, val borderActive: Int, val fg: Int) {
+    companion object {
+        fun from(o: JSONObject?, fallbackBg: Int) = Colors(
+            color(o?.optString("bg"), fallbackBg),
+            color(o?.optString("bgActive"), color(o?.optString("bg"), fallbackBg)),
+            color(o?.optString("border"), Color.TRANSPARENT),
+            color(o?.optString("borderActive"), color(o?.optString("border"), Color.TRANSPARENT)),
+            color(o?.optString("fg"), Color.WHITE),
+        )
+    }
+}
+
+/** RecyclerView 메서드 (리플렉션) */
+private class Rv(cl: ClassLoader) {
+    private val rv = cl.loadClass(RECYCLER_VIEW)
+    private val listenerClass: Class<*> = cl.loadClass(ITEM_TOUCH_LISTENER)
+    private val childAdapterPosition: Method = rv.getMethod("getChildAdapterPosition", View::class.java)
+    private val adapter: Method = rv.getMethod("getAdapter")
+    private val invalidateDecor: Method = rv.getMethod("invalidateItemDecorations")
+    private val addTouch: Method = rv.getMethod("addOnItemTouchListener", listenerClass)
+    private val removeTouch: Method = rv.getMethod("removeOnItemTouchListener", listenerClass)
+    private var itemId: Method? = null
+
+    fun idOf(list: View, child: View): Long? = try {
+        val pos = childAdapterPosition.invoke(list, child) as Int
+        if (pos < 0) {
+            null
+        } else {
+            val a = adapter.invoke(list)
+            val m = itemId ?: a!!.javaClass.getMethod("getItemId", Int::class.javaPrimitiveType).also { itemId = it }
+            val id = m.invoke(a, pos) as Long
+            if (id == -1L) -1000L - pos else id
+        }
+    } catch (e: Throwable) {
+        null
+    }
+
+    fun invalidateDecorations(list: View) {
+        try {
+            invalidateDecor.invoke(list)
+        } catch (e: Throwable) {
+            list.requestLayout()
+        }
+    }
+
+    fun touchListener(handler: InvocationHandler): Any =
+        Proxy.newProxyInstance(listenerClass.classLoader, arrayOf(listenerClass), handler)
+
+    fun addTouchListener(list: View, l: Any) = addTouch.invoke(list, l)
+    fun removeTouchListener(list: View, l: Any) {
+        try {
+            removeTouch.invoke(list, l)
+        } catch (e: Throwable) {
+        }
+    }
+}
+
+/** 디스코드 버튼 하나 */
+private class ButtonView(
+    ctx: Context,
+    val id: String,
+    var label: String,
+    var colors: Colors,
+    val confirmLabel: String,
+    val confirmColors: Colors?,
+    icon: String,
+    typeface: Typeface?,
+    textSizeSp: Float,
+    radius: Float,
+    dp: (Float) -> Int,
+) : LinearLayout(ctx) {
+    val text = TextView(ctx)
+    val image = ImageView(ctx)
+    private val bg = GradientDrawable()
+    private val border = dp(BUTTON_BORDER)
+    private var pressAmount = 0f
+    private var colorAmount = 0f
+    private var from: Colors = colors
+    private var pressAnim: ValueAnimator? = null
+    private var colorAnim: ValueAnimator? = null
+    var armed = confirmLabel.isEmpty()
+
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(BUTTON_PADDING_H), 0, dp(BUTTON_PADDING_H), 0)
+        bg.cornerRadius = radius
+        background = bg
+
+        val iconId = if (icon.isEmpty()) 0 else ctx.resources.getIdentifier(icon, "drawable", ctx.packageName)
+        if (iconId != 0) {
+            try {
+                image.setImageDrawable(ctx.getDrawable(iconId)?.mutate())
+                val lp = LayoutParams(dp(BUTTON_ICON), dp(BUTTON_ICON))
+                lp.marginEnd = dp(BUTTON_ICON_GAP)
+                addView(image, lp)
+            } catch (e: Throwable) {
+            }
+        }
+
+        text.text = label
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+        if (typeface != null) text.typeface = typeface else text.paint.isFakeBoldText = true
+        text.includeFontPadding = false
+        text.isSingleLine = true
+        text.ellipsize = TextUtils.TruncateAt.END
+        addView(text, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        applyColors()
+    }
+
+    private fun applyColors() {
+        val c = colors
+        val f = from
+        val t = colorAmount
+        val bgc = mix(mix(f.bg, c.bg, t), mix(f.bgActive, c.bgActive, t), pressAmount)
+        val bc = mix(mix(f.border, c.border, t), mix(f.borderActive, c.borderActive, t), pressAmount)
+        val fg = mix(f.fg, c.fg, t)
+        bg.setColor(bgc)
+        bg.setStroke(border, bc)
+        text.setTextColor(fg)
+        image.setColorFilter(fg)
+    }
+
+    private fun applyScale() {
+        val w = width.toFloat()
+        val s = if (w > 0) 1f - (PRESS_SHRINK_PX / w) * pressAmount else 1f
+        scaleX = s
+        scaleY = s
+    }
+
+    /** 누르기/떼기 (디스코드 ON_PRESS_SPRING 으로 줄어들고 색이 진해짐) */
+    fun press(down: Boolean) {
+        pressAnim?.cancel()
+        val start = pressAmount
+        val target = if (down) 1f else 0f
+        if (start == target) return
+        pressAnim = animateSpring(ON_PRESS_SPRING, {
+            pressAmount = start + (target - start) * it
+            applyColors()
+            applyScale()
+        })
+    }
+
+    /** 확인 상태로 (글자·색이 바뀜) */
+    fun arm() {
+        armed = true
+        if (confirmLabel.isNotEmpty()) {
+            text.text = confirmLabel
+            label = confirmLabel
+        }
+        val next = confirmColors ?: return
+        from = colors
+        colors = next
+        colorAmount = 0f
+        colorAnim?.cancel()
+        colorAnim = animateSpring(SPRING_STANDARD, {
+            colorAmount = it
+            applyColors()
+        })
+    }
+}
+
+/** 메시지 밑 버튼 줄 하나 (한 번에 하나만) */
+private class Bar(
+    val list: ViewGroup,
+    val rv: Rv,
+    val itemId: Long,
+    row: View,
+    opts: JSONObject,
+    typeface: Typeface?,
+    val onResult: (String) -> Unit,
+    val onClosed: (Bar) -> Unit,
+) {
+    private val ctx = list.context
+    private val dm = ctx.resources.displayMetrics
+    fun dp(v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, dm).roundToInt()
+
+    private val container = LinearLayout(ctx)
+    private val buttons = ArrayList<ButtonView>()
+    private val fullHeight = dp(ROW_TOP + BUTTON_HEIGHT + ROW_BOTTOM)
+    /** 지금 끼워 넣은 자리 높이 (px) */
+    var height = 0
+        private set
+    private var progress = 0f
+    private var anim: ValueAnimator? = null
+    private var anchorTop = Int.MIN_VALUE
+    private var compensating = false
+    private var closing = false
+    private var delivered = false
+    private var cleaned = false
+    private val inset: Int
+    private var pressed: ButtonView? = null
+    private var downX = 0f
+    private var downY = 0f
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+    private val clip = Rect()
+    private val touch: Any
+    private val preDraw = ViewTreeObserver.OnPreDrawListener {
+        update()
+        true
+    }
+    private val detach = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {}
+        override fun onViewDetachedFromWindow(v: View) = finishNow()
+    }
+
+    init {
+        container.orientation = LinearLayout.HORIZONTAL
+        container.gravity = Gravity.CENTER_VERTICAL
+        val font = opts.optJSONObject("font")
+        val size = font?.optDouble("size", 14.0)?.toFloat() ?: 14f
+        val radius = opts.optDouble("radius", 8.0).toFloat().let { TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, it, dm) }
+        val arr = opts.optJSONArray("buttons")
+        for (i in 0 until (arr?.length() ?: 0)) {
+            val b = arr!!.optJSONObject(i) ?: continue
+            val confirm = b.optJSONObject("confirm")
+            val v = ButtonView(
+                ctx,
+                b.optString("id"),
+                b.optString("label", b.optString("id")),
+                Colors.from(b.optJSONObject("colors"), Color.parseColor("#4e5058")),
+                confirm?.optString("label") ?: "",
+                confirm?.optJSONObject("colors")?.let { Colors.from(it, Color.parseColor("#da373c")) },
+                b.optString("icon"),
+                typeface,
+                size,
+                radius,
+                ::dp,
+            )
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(BUTTON_HEIGHT))
+            if (buttons.isNotEmpty()) lp.marginStart = dp(BUTTON_GAP)
+            container.addView(v, lp)
+            buttons.add(v)
+        }
+        inset = contentInset(row) ?: dp(opts.optDouble("inset", 68.0).toFloat())
+        measureContainer()
+        container.alpha = 0f
+        container.pivotX = 0f
+        container.pivotY = 0f
+        list.overlay.add(container)
+
+        touch = rv.touchListener { proxy, method, args ->
+            when (method.name) {
+                "onInterceptTouchEvent" -> intercept(args!![1] as MotionEvent)
+                "onTouchEvent" -> {
+                    onTouch(args!![1] as MotionEvent)
+                    null
+                }
+                "onRequestDisallowInterceptTouchEvent" -> null
+                "equals" -> proxy === args?.getOrNull(0)
+                "hashCode" -> System.identityHashCode(proxy)
+                "toString" -> "DoubleTapActions.Bar"
+                else -> null
+            }
+        }
+        rv.addTouchListener(list, touch)
+        list.viewTreeObserver.addOnPreDrawListener(preDraw)
+        list.addOnAttachStateChangeListener(detach)
+        animateTo(1f)
+    }
+
+    /** 메시지 글자가 시작하는 x (아바타 오른쪽) */
+    private fun contentInset(row: View): Int? {
+        try {
+            val cls = row.javaClass.classLoader?.loadClass(ACCESSORIES_VIEW) ?: return null
+            val found = find(row, cls) ?: return null
+            val r = Rect(0, 0, 0, 0)
+            (row as? ViewGroup)?.offsetDescendantRectToMyCoords(found, r) ?: return null
+            var x = r.left + found.paddingLeft
+            if (found is ViewGroup && found.childCount > 0) {
+                var m = Int.MAX_VALUE
+                for (i in 0 until found.childCount) m = min(m, found.getChildAt(i).left)
+                if (m != Int.MAX_VALUE) x = r.left + m
+            }
+            return if (x > 0 && x < row.width / 2) x else null
+        } catch (e: Throwable) {
+            return null
+        }
+    }
+
+    private fun find(v: View, cls: Class<*>): View? {
+        if (cls.isInstance(v)) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), cls)?.let { return it }
+        return null
+    }
+
+    private fun measureContainer() {
+        container.measure(
+            View.MeasureSpec.makeMeasureSpec(max(0, list.width - inset - dp(8f)), View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(dp(BUTTON_HEIGHT), View.MeasureSpec.EXACTLY),
+        )
+        container.layout(0, 0, container.measuredWidth, container.measuredHeight)
+    }
+
+    fun matches(child: View) = rv.idOf(list, child) == itemId
+
+    private fun findRow(): View? {
+        for (i in 0 until list.childCount) {
+            val c = list.getChildAt(i)
+            if (matches(c)) return c
+        }
+        return null
+    }
+
+    /** 펼치기(1)·접기(0). 디스코드 기본 스프링 */
+    private fun animateTo(target: Float, onEnd: () -> Unit = {}) {
+        anim?.cancel()
+        val start = progress
+        anchorTop = findRow()?.top ?: Int.MIN_VALUE
+        // 펼칠 때만 이 메시지를 제자리에 둔다. 접을 때는 스크롤·키보드와 싸우지 않게 그냥 둔다
+        compensating = target > start
+        anim = animateSpring(SPRING_STANDARD, {
+            progress = start + (target - start) * it
+            val h = (fullHeight * progress).roundToInt()
+            if (h != height) {
+                height = h
+                rv.invalidateDecorations(list)
+            }
+            container.alpha = progress
+            val s = 0.96f + 0.04f * progress
+            container.scaleX = s
+            container.scaleY = s
+            list.invalidate()
+        }, {
+            compensating = false
+            onEnd()
+        })
+    }
+
+    /** 매 프레임 (그리기 직전): 메시지 위치 유지, 버튼 줄 위치 맞추기 */
+    private fun update() {
+        val row = findRow()
+        if (row == null) {
+            container.visibility = View.INVISIBLE
+            return
+        }
+        if (compensating && anchorTop != Int.MIN_VALUE) {
+            // 펼쳐지는 동안 이 메시지는 제자리에 두고 밑의 메시지를 민다 (화면 밑에 닿으면 위로 자란다)
+            val bottomLimit = list.height - list.paddingBottom - row.height - height
+            val want = min(anchorTop, max(bottomLimit, list.paddingTop - row.height))
+            val dy = row.top - want
+            if (dy != 0) list.scrollBy(0, dy)
+        }
+        container.visibility = View.VISIBLE
+        val x = (row.left + inset).toFloat()
+        val y = (row.bottom + dp(ROW_TOP)).toFloat()
+        if (container.translationX != x) container.translationX = x
+        if (container.translationY != y) container.translationY = y
+        // 자리만큼만 보인다 (밑의 메시지와 겹치지 않게)
+        val visible = max(0, height - dp(ROW_TOP))
+        clip.set(-dp(8f), -dp(4f), container.width + dp(8f), min(container.height + dp(4f), visible))
+        container.clipBounds = clip
+    }
+
+    private fun buttonAt(x: Float, y: Float): ButtonView? {
+        if (container.visibility != View.VISIBLE || progress < 0.5f) return null
+        val cx = x - container.translationX
+        val cy = y - container.translationY
+        for (b in buttons) {
+            if (cx >= b.left && cx <= b.right && cy >= b.top - dp(6f) && cy <= b.bottom + dp(6f)) return b
+        }
+        return null
+    }
+
+    private fun intercept(e: MotionEvent): Boolean {
+        if (closing) return false
+        if (e.actionMasked != MotionEvent.ACTION_DOWN) return pressed != null
+        val b = buttonAt(e.x, e.y)
+        if (b == null) {
+            // 다른 곳을 누르면 닫힌다 (누른 건 그대로 전달)
+            close("")
+            return false
+        }
+        pressed = b
+        downX = e.x
+        downY = e.y
+        b.press(true)
+        return true
+    }
+
+    private fun onTouch(e: MotionEvent) {
+        val b = pressed ?: return
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE -> if (abs(e.x - downX) > slop * 2 || abs(e.y - downY) > slop * 2) {
+                b.press(false)
+                pressed = null
+            }
+            MotionEvent.ACTION_UP -> {
+                b.press(false)
+                pressed = null
+                if (buttonAt(e.x, e.y) === b) click(b)
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                b.press(false)
+                pressed = null
+            }
+        }
+    }
+
+    private fun click(b: ButtonView) {
+        try {
+            list.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        } catch (e: Throwable) {
+        }
+        if (!b.armed) {
+            b.arm()
+            list.post { measureContainer() }
+            return
+        }
+        close(b.id)
+    }
+
+    private fun deliver(result: String) {
+        if (delivered) return
+        delivered = true
+        onResult(result)
+    }
+
+    fun close(result: String) {
+        deliver(result)
+        if (closing) return
+        closing = true
+        pressed = null
+        animateTo(0f) { cleanup() }
+    }
+
+    fun finishNow() {
+        deliver("")
+        anim?.cancel()
+        cleanup()
+    }
+
+    private fun cleanup() {
+        if (cleaned) return
+        cleaned = true
+        closing = true
+        height = 0
+        try {
+            list.overlay.remove(container)
+        } catch (e: Throwable) {
+        }
+        rv.removeTouchListener(list, touch)
+        try {
+            list.viewTreeObserver.removeOnPreDrawListener(preDraw)
+        } catch (e: Throwable) {
+        }
+        list.removeOnAttachStateChangeListener(detach)
+        rv.invalidateDecorations(list)
+        onClosed(this)
+    }
+}
+
+private class Touched(val list: WeakReference<ViewGroup>, val row: WeakReference<View>, val at: Long)
+
 @Suppress("UNUSED")
 val doubleTapActionsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
 
     start {
         var touched: Touched? = null
-        var open: PopupWindow? = null
+        var active: Bar? = null
+        /** 자리를 더해 둔 줄: [마지막으로 넣은 bottom, 더한 양] */
+        val added = WeakHashMap<View, IntArray>()
 
-        val recyclerView = XposedHelpers.findClass(RECYCLER_VIEW, classLoader)
-        val chatListView = XposedHelpers.findClass(CHAT_LIST_VIEW, classLoader)
+        val cl = classLoader
+        val recyclerView = XposedHelpers.findClass(RECYCLER_VIEW, cl)
+        val chatListView = XposedHelpers.findClass(CHAT_LIST_VIEW, cl)
+        val rv = Rv(cl)
+
+        var fontGetter: Method? = null
+        var fontManager: Any? = null
+        fun typeface(ctx: Context, family: String?): Typeface? {
+            if (family.isNullOrEmpty()) return null
+            return try {
+                if (fontGetter == null) {
+                    val c = cl.loadClass(FONT_MANAGER)
+                    fontManager = c.getMethod("getInstance").invoke(null)
+                    fontGetter = c.getMethod("getTypeface", String::class.java, Int::class.javaPrimitiveType, AssetManager::class.java)
+                }
+                fontGetter!!.invoke(fontManager, family, Typeface.NORMAL, ctx.assets) as? Typeface
+            } catch (e: Throwable) {
+                log.w("font $family: $e")
+                null
+            }
+        }
 
         unhooks = listOf(
+            // 메시지를 누르기 시작한 줄을 기억
             XposedHelpers.findAndHookMethod(
                 recyclerView,
                 "onInterceptTouchEvent",
@@ -82,14 +639,36 @@ val doubleTapActionsPlugin = plugin {
                         val ev = param.args[0] as? MotionEvent ?: return
                         if (ev.actionMasked != MotionEvent.ACTION_DOWN) return
                         val row = childUnder(list, ev.x, ev.y) ?: return
-                        touched = Touched(WeakReference(row), SystemClock.uptimeMillis())
+                        touched = Touched(WeakReference(list), WeakReference(row), SystemClock.uptimeMillis())
+                    }
+                },
+            ),
+            // 버튼 줄 자리만큼 그 메시지 아래 여백을 더한다 → RecyclerView 가 밑의 메시지를 민다
+            XposedHelpers.findAndHookMethod(
+                recyclerView,
+                "getItemDecorInsetsForChild",
+                View::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val bar = active
+                        if (bar == null && added.isEmpty()) return
+                        val list = param.thisObject as? View ?: return
+                        if (!chatListView.isInstance(list)) return
+                        val rect = param.result as? Rect ?: return
+                        val child = param.args[0] as? View ?: return
+                        val prev = added[child]
+                        val want = if (bar != null && bar.list === list && bar.height > 0 && bar.matches(child)) bar.height else 0
+                        if (prev == null && want == 0) return
+                        val base = if (prev != null && rect.bottom == prev[0]) prev[0] - prev[1] else rect.bottom
+                        rect.bottom = base + want
+                        if (want == 0) added.remove(child) else added[child] = intArrayOf(rect.bottom, want)
                     }
                 },
             ),
         )
 
         /**
-         * args[0]: JSON {buttons:[{id,label,bg,fg,confirm?}], bg, inset}
+         * args[0]: JSON {buttons:[{id,label,icon,colors:{bg,bgActive,border,borderActive,fg},confirm?:{label,colors}}], font:{family,size}, radius, inset}
          * 돌려주는 값: 누른 버튼 id, 닫으면 "", 띄울 줄이 없으면 "norow"
          */
         registerNativeAsyncMethod("${manifest.id}.showActions") { args ->
@@ -100,92 +679,30 @@ val doubleTapActionsPlugin = plugin {
             }
             withContext(Dispatchers.Main) {
                 val t = touched ?: return@withContext "norow"
+                val list = t.list.get()
                 val row = t.row.get()
-                if (row == null || !row.isAttachedToWindow || SystemClock.uptimeMillis() - t.at > TOUCH_TTL) {
+                if (list == null || row == null || !row.isAttachedToWindow || row.parent !== list ||
+                    SystemClock.uptimeMillis() - t.at > TOUCH_TTL
+                ) {
                     return@withContext "norow"
                 }
-                open?.dismiss()
+                val id = rv.idOf(list, row) ?: return@withContext "norow"
+                active?.finishNow()
                 suspendCancellableCoroutine { cont ->
-                    var done = false
-                    fun finish(result: String) {
-                        if (done) return
-                        done = true
-                        if (cont.isActive) cont.resume(result)
-                    }
-
-                    val ctx = row.context
-                    val dm = ctx.resources.displayMetrics
-                    fun dp(v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, dm).toInt()
-
-                    val bar = LinearLayout(ctx)
-                    bar.orientation = LinearLayout.HORIZONTAL
-                    bar.setPadding(dp(4f), dp(4f), dp(4f), dp(4f))
-                    bar.background = GradientDrawable().apply {
-                        cornerRadius = dp(14f).toFloat()
-                        setColor(color(opts.optString("bg"), Color.parseColor("#2b2d31")))
-                    }
-                    bar.elevation = dp(6f).toFloat()
-
-                    lateinit var popup: PopupWindow
-                    val buttons = opts.optJSONArray("buttons")
-                    for (i in 0 until (buttons?.length() ?: 0)) {
-                        val b = buttons!!.optJSONObject(i) ?: continue
-                        val id = b.optString("id")
-                        val tv = TextView(ctx)
-                        tv.text = b.optString("label", id)
-                        tv.setTextColor(color(b.optString("fg"), Color.WHITE))
-                        tv.textSize = 14f
-                        tv.paint.isFakeBoldText = true
-                        tv.gravity = Gravity.CENTER
-                        tv.setPadding(dp(16f), dp(8f), dp(16f), dp(8f))
-                        tv.background = GradientDrawable().apply {
-                            cornerRadius = dp(10f).toFloat()
-                            setColor(color(b.optString("bg"), Color.parseColor("#5865f2")))
-                        }
-                        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                        if (i > 0) lp.leftMargin = dp(6f)
-                        tv.layoutParams = lp
-                        // confirm 이 있으면 한 번 누르면 글자가 바뀌고, 한 번 더 눌러야 고른다
-                        val confirm = b.optString("confirm")
-                        var armed = confirm.isEmpty()
-                        tv.setOnClickListener {
-                            if (!armed) {
-                                armed = true
-                                tv.text = confirm
-                                return@setOnClickListener
-                            }
-                            finish(id)
-                            popup.dismiss()
-                        }
-                        bar.addView(tv)
-                    }
-
-                    popup = PopupWindow(bar, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
-                    popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                    popup.isOutsideTouchable = true
-                    popup.elevation = dp(6f).toFloat()
-                    popup.setOnDismissListener {
-                        if (open === popup) open = null
-                        finish("")
-                    }
-                    open = popup
-                    cont.invokeOnCancellation { row.post { popup.dismiss() } }
-
-                    // 메시지 글자와 줄을 맞춘다 (아바타 자리만큼 안쪽에서)
-                    val inset = dp(opts.optDouble("inset", 64.0).toFloat())
+                    val font = opts.optJSONObject("font")
+                    val tf = typeface(list.context, font?.optString("family"))
                     try {
-                        popup.showAsDropDown(row, inset, dp(2f), Gravity.START)
+                        val bar = Bar(list, rv, id, row, opts, tf, { result ->
+                            if (cont.isActive) cont.resume(result)
+                        }, { closed ->
+                            if (active === closed) active = null
+                        })
+                        active = bar
+                        cont.invokeOnCancellation { list.post { bar.close("") } }
                     } catch (e: Throwable) {
-                        finish("norow")
-                        return@suspendCancellableCoroutine
+                        log.e("showActions: $e")
+                        if (cont.isActive) cont.resume("norow")
                     }
-                    // 살짝 커지며 나타나기
-                    bar.alpha = 0f
-                    bar.scaleX = 0.9f
-                    bar.scaleY = 0.9f
-                    bar.pivotX = 0f
-                    bar.pivotY = 0f
-                    bar.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160L).setInterpolator(DecelerateInterpolator()).start()
                 }
             }
         }
