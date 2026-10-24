@@ -46,6 +46,7 @@ function Enter({ children, presentation }: { children?: any; presentation?: stri
         const style = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({ current: { progress: p }, inverted: one, layouts: { screen: { width, height } } }).cardStyle
         return { m, p, style }
     })
+    const [busy, setBusy] = useState(!!anim)
     useEffect(() => {
         if (!anim) return
         status.screens++
@@ -54,10 +55,11 @@ function Enter({ children, presentation }: { children?: any; presentation?: stri
             m.easing === 'spring'
                 ? Animated.spring(p, { toValue: 1, ...springFor(m.duration, 0.7), useNativeDriver: true } as any)
                 : Animated.timing(p, { toValue: 1, duration: m.duration, easing: easingFrom(Easing, m.easing), useNativeDriver: true })
-        run.start()
+        run.start(() => setBusy(false))
         return () => run.stop()
     }, [])
-    return createElement(Animated.View, { style: anim ? [{ flex: 1 }, anim.style] : { flex: 1 }, collapsable: false }, children)
+    // 움직이는 동안만 GPU 텍스처로 그려서 버벅임을 줄인다
+    return createElement(Animated.View, { style: anim ? [{ flex: 1 }, anim.style] : { flex: 1 }, collapsable: false, renderToHardwareTextureAndroid: busy }, children)
 }
 
 /** 네이티브 전환 종류 */
@@ -119,7 +121,16 @@ export function patchNativeScreens(cleanup: (...fns: Array<() => unknown>) => vo
                     try {
                         const props = args[1]
                         if (!props || props.children === undefined) return args as any
-                        return [args[0], { ...props, children: createElement(Enter, { presentation: props.stackPresentation }, props.children) }, ...args.slice(2)] as any
+                        const next: any = { ...props, children: createElement(Enter, { presentation: props.stackPresentation }, props.children) }
+                        // 네이티브 전환도 여기서 바꾼다 (RNSScreen 요소까지 안 내려오는 경우가 있어서)
+                        if (props.stackAnimation !== 'none') {
+                            const anim = nativeAnimationFor(props)
+                            if (anim && anim !== props.stackAnimation) {
+                                next.stackAnimation = anim
+                                status.nativeScreens++
+                            }
+                        }
+                        return [args[0], next, ...args.slice(2)] as any
                     } catch (e) {
                         report('screenItem', e)
                         return args as any

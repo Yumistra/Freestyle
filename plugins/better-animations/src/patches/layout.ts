@@ -37,18 +37,19 @@ function currentGuild(): string | null | undefined {
     }
 }
 
-function play(value: Animated.Value, m: ModuleSettings) {
+function play(value: Animated.Value, m: ModuleSettings, done?: () => void) {
     value.setValue(0)
     const run =
         m.easing === 'spring'
             ? Animated.spring(value, { toValue: 1, ...springFor(m.duration, 0.7), useNativeDriver: true } as any)
             : Animated.timing(value, { toValue: 1, duration: m.duration, easing: easingFrom(Easing, m.easing), useNativeDriver: true })
-    run.start()
+    run.start(() => done?.())
     status.layouts++
 }
 
 function GuildSwitch({ __type, __props }: { __type: any; __props: any }) {
     const [value] = useState(() => new Animated.Value(1))
+    const [busy, setBusy] = useState(false)
     const last = useRef<string | null | undefined>(undefined)
     useEffect(() => {
         const check = () => {
@@ -58,7 +59,10 @@ function GuildSwitch({ __type, __props }: { __type: any; __props: any }) {
             last.current = g
             seenGuild = g
             const m = active('servers')
-            if (changed && m && m.effect !== 'none') play(value, m)
+            if (changed && m && m.effect !== 'none') {
+                setBusy(true)
+                play(value, m, () => setBusy(false))
+            }
         }
         check()
         const store = guildStore()
@@ -73,7 +77,7 @@ function GuildSwitch({ __type, __props }: { __type: any; __props: any }) {
         const parts = partsFor(value, h, width, height, undefined)
         style = [{ flex: 1 }, { transform: parts.transform, ...(parts.opacity ? { opacity: parts.opacity } : {}) }]
     }
-    return createElement(Animated.View, { style, collapsable: false }, createElement(__type, __props))
+    return createElement(Animated.View, { style, collapsable: false, renderToHardwareTextureAndroid: busy }, createElement(__type, __props))
 }
 
 export function patchServerSwitch(cleanup: (...fns: Array<() => unknown>) => void) {

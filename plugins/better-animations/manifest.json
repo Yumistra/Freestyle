@@ -5,7 +5,7 @@
 	"description": "BetterDiscord의 BetterAnimations를 모바일로 옮겼습니다. 채팅 메시지(나타나기·지워지기·밀리기), 화면 전환, 채널 화면 밀기, 채널 목록 접기, 서버 바꾸기, 서버 폴더, 아래 창, 팝업 메뉴, 확인창과 배경, 토스트, 작은 UI 움직임의 효과·나갈 때 효과·방향·위치·속도·곡선을 바꿉니다. 설치·업데이트 후 앱을 다시 시작하세요.",
 	"author": "Yumistra",
 	"icon": "MagicWandIcon",
-	"version": "2.0.2",
+	"version": "2.0.3",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}
