@@ -449,7 +449,8 @@ private class Bar(
         anim?.cancel()
         val start = progress
         anchorTop = findRow()?.top ?: Int.MIN_VALUE
-        compensating = true
+        // 펼칠 때만 이 메시지를 제자리에 둔다. 접을 때는 스크롤·키보드와 싸우지 않게 그냥 둔다
+        compensating = target > start
         anim = animateSpring(SPRING_STANDARD, {
             progress = start + (target - start) * it
             val h = (fullHeight * progress).roundToInt()
@@ -540,12 +541,12 @@ private class Bar(
 
     private fun click(b: ButtonView) {
         try {
-            b.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+            list.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
         } catch (e: Throwable) {
         }
         if (!b.armed) {
             b.arm()
-            b.post { measureContainer() }
+            list.post { measureContainer() }
             return
         }
         close(b.id)
