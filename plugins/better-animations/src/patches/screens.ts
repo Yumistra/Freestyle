@@ -28,7 +28,7 @@ function Enter({ children, presentation }: { children?: any; presentation?: stri
         if (!m || m.effect === 'none' || index < 1 || (presentation ?? 'push') !== 'push') return undefined
         const { width, height } = Dimensions.get('window')
         const p = new Animated.Value(0)
-        const style = makeCardInterpolator(effectOf('stack', m.effect))({ current: { progress: p }, inverted: one, layouts: { screen: { width, height } } }).cardStyle
+        const style = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({ current: { progress: p }, inverted: one, layouts: { screen: { width, height } } }).cardStyle
         return { m, p, style }
     })
     useEffect(() => {

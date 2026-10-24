@@ -1,9 +1,11 @@
+import { pingNative, reloadNative } from './native'
 import { patchConstants } from './patches/constants'
+import { patchLayout } from './patches/layout'
 import { patchNativeScreens } from './patches/screens'
 import { patchSheets } from './patches/sheets'
 import { patchJsStack } from './patches/stack'
 import { patchWorklets } from './patches/worklets'
-import { bindStorage, DEFAULTS, report } from './settings'
+import { bindStorage, DEFAULTS, onSettingsChange, report } from './settings'
 import SettingsPage from './ui/Settings'
 
 /**
@@ -13,6 +15,8 @@ import SettingsPage from './ui/Settings'
  *  - 아래 창: @gorhom/bottom-sheet 의 열고 닫는 움직임
  *  - 팝업 메뉴·확인창·토스트·서버 폴더: Reanimated 워클릿을 우리 워클릿으로 바꿔 넣기
  *  - 채널 화면 밀기·작은 움직임·폴더 펼침: 디스코드 애니메이션 상수 바꾸기
+ *  - 채널 목록 접기·서버 바꾸기: Flux 액션에 맞춰 LayoutAnimation
+ *  - 채팅 메시지: 네이티브(plugin.jar)가 채팅 목록(RecyclerView)에서 직접
  * 각 부분은 따로 실패해도 나머지는 동작하게 한다.
  */
 export default plugin({
@@ -32,6 +36,10 @@ export default plugin({
         tryPatch('sheets', patchSheets)
         tryPatch('worklets', () => patchWorklets(cleanup))
         tryPatch('constants', () => patchConstants(cleanup))
+        tryPatch('layout', patchLayout)
+        // 메시지 애니메이션은 네이티브가 설정 파일을 직접 읽는다
+        cleanup(onSettingsChange(reloadNative) as any)
+        pingNative()
     },
     SettingsComponent: SettingsPage,
 } as any)

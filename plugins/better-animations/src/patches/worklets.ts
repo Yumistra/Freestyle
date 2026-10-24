@@ -2,7 +2,7 @@ import { getModules, lookupModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { Dimensions } from 'react-native'
-import { easingFrom, effectOf, normalize, springFor, type ModuleKey } from '../effects'
+import { applyMove, easingFrom, effectOf, exitEffectOf, springFor, type ModuleKey } from '../effects'
 import { active, report, status, version } from '../settings'
 
 /**
@@ -67,13 +67,13 @@ const HELPERS =
     "function T(v,cfg,cb){return BA.t4?wt(v,cfg,'animate-always',cb):wt(v,cfg,cb);}" +
     "function S(v,cfg,cb){return BA.s4?ws(v,cfg,'animate-always',cb):ws(v,cfg,cb);}" +
     'function go(v){return BA.spring?S(v,BA.springCfg):T(v,BA.timing);}' +
-    'var h=BA.hidden;'
+    'var H0=BA.hidden,H1=BA.exit;'
 
 const ALERT_CARD =
     'function BetterAnimationsAlertCard(){var c=this.__closure;' +
     HELPERS +
     'var sharedVisible=c.sharedVisible,sharedTransitionState=c.sharedTransitionState,TransitionStates=c.TransitionStates,runOnJS=c.runOnJS,cleanUp=c.cleanUp,windowHeight=c.windowHeight,margin=c.ALERT_MODAL_MARGIN,sharedIndex=c.sharedIndex,sharedTopHeight=c.sharedTopHeight;' +
-    'var visible=sharedVisible.get();var index=sharedIndex.get();var on=visible===1;' +
+    'var visible=sharedVisible.get();var index=sharedIndex.get();var on=visible===1;var h=sharedTransitionState.get()===TransitionStates.YEETED?H1:H0;' +
     'function onComplete(finished){if(finished===true&&sharedVisible.get()===0&&sharedTransitionState.get()===TransitionStates.YEETED){runOnJS(cleanUp)();}}' +
     'var OFFSETS=[0,-20,-34];var offset=OFFSETS[index]!==undefined?OFFSETS[index]:-12;' +
     'var maxHeight=windowHeight-margin*2-Math.max(c.safeAreaTop,c.safeAreaBottom)*2;' +
@@ -90,13 +90,13 @@ const ALERT_BACKDROP =
     'function BetterAnimationsAlertBackdrop(){var c=this.__closure;' +
     HELPERS +
     'var sharedVisible=c.sharedVisible,sharedTransitionState=c.sharedTransitionState,TransitionStates=c.TransitionStates,runOnJS=c.runOnJS,cleanUp=c.cleanUp;' +
-    'return{opacity:T(sharedVisible.get(),BA.fade,function(finished){if(finished===true&&sharedVisible.get()===0&&sharedTransitionState.get()===TransitionStates.YEETED){runOnJS(cleanUp)();}})};}'
+    'return{opacity:T(sharedVisible.get()*BA.dim,BA.fade,function(finished){if(finished===true&&sharedVisible.get()===0&&sharedTransitionState.get()===TransitionStates.YEETED){runOnJS(cleanUp)();}})};}'
 
 const TOAST =
     'function BetterAnimationsToast(){var c=this.__closure;' +
     HELPERS +
     'var toastHeight=c.toastHeight,animationState=c.animationState,AnimationState=c.AnimationState,withDelay=c.withDelay,state=c.state,TransitionStates=c.TransitionStates,runOnJS=c.runOnJS,cleanUp=c.cleanUp;' +
-    "var dir=c.position==='top'?-1:1;" +
+    "var dir=c.position==='top'?-1:1;var h=state===TransitionStates.YEETED?H1:H0;" +
     'var tx=h.tx+h.txW*BA.W;var ty=(h.edge?toastHeight.get()*dir:0)+h.ty*dir+h.tyH*dir*BA.H;' +
     "if(!c.hasEntered.get()){var t0=[{perspective:800},{translateX:tx},{translateY:ty},{scale:h.s}];if(h.r){t0.push({rotate:h.r+'deg'});}if(h.rx){t0.push({rotateX:h.rx+'deg'});}return{opacity:0,transform:t0};}" +
     'var k=c.interpolate(animationState.get(),c.ANIMATION_STATE_INPUT,[0,1]);' +
@@ -113,7 +113,7 @@ const MENU =
     'function BetterAnimationsContextMenu(){var c=this.__closure;' +
     HELPERS +
     'var transitionState=c.transitionState,TransitionStates=c.TransitionStates,runOnJS=c.runOnJS,cleanUp=c.cleanUp,onClose=c.onClose;' +
-    'var k=c.interpolate(c.visible.get(),[0,1],[0,1]);' +
+    'var k=c.interpolate(c.visible.get(),[0,1],[0,1]);var h=transitionState===TransitionStates.YEETED?H1:H0;' +
     'function lerp(a,b){return a+(b-a)*k;}' +
     'var halfH=Math.min(c.maxHeight,c.height)/2;var halfW=c.CONTEXT_MENU_MIN_WIDTH/2;' +
     "var dirY=c.positionY==='below'?-1:1;var dirX=c.positionX==='left'?-1:1;" +
@@ -124,12 +124,12 @@ const MENU =
     "if(h.rx){t.push({rotateX:go(lerp(h.rx,0)+'deg')});}" +
     'return{opacity:T(lerp(h.o,1),BA.fade,function(finished){if(finished&&transitionState===TransitionStates.YEETED){runOnJS(cleanUp)();runOnJS(onClose)();}}),transform:t};}'
 
-const MENU_BACKDROP = 'function BetterAnimationsContextMenuBackdrop(){var c=this.__closure;' + HELPERS + 'return{opacity:T(c.visible.get(),BA.fade)};}'
+const MENU_BACKDROP = 'function BetterAnimationsContextMenuBackdrop(){var c=this.__closure;' + HELPERS + 'return{opacity:T(c.visible.get()*BA.dim,BA.fade)};}'
 
 const FOLDER =
     'function BetterAnimationsGuildFolderItem(){var c=this.__closure;' +
     HELPERS +
-    'var on=c.visible.get()===1;var dir=c.fromTop?-1:1;' +
+    'var on=c.visible.get()===1;var dir=c.fromTop?-1:1;var h=c.state===c.TransitionStates.YEETED?H1:H0;' +
     'var tx=h.tx+h.txW*BA.W;var ty=(h.edge?dir*c.guildItemSize:0)+dir*h.ty;' +
     'var t=[{perspective:600},{translateX:go(on?0:tx)},{translateY:go(on?0:ty)},{scale:go(on?1:h.s)}];' +
     "if(h.r){t.push({rotate:go(on?'0deg':h.r+'deg')});}" +
@@ -165,30 +165,72 @@ const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertB
 
 const baCache = new Map<string, any>()
 
+/** 움직이는 대상의 대략적인 크기 (위치 설정의 기준점 계산용) */
+function sizeOf(module: ModuleKey, W: number, H: number): [number, number] {
+    switch (module) {
+        case 'alert':
+            return [Math.min(W - 32, 400), Math.min(H * 0.4, 320)]
+        case 'toast':
+            return [Math.min(W - 32, 360), 48]
+        case 'menu':
+            return [220, 240]
+        case 'folder':
+            return [48, 48]
+        default:
+            return [W, H]
+    }
+}
+
+/** Reanimated 용 계단 곡선 (워클릿이어야 한다) */
+function reaSteps(E: any) {
+    return (n: number) =>
+        typeof E.steps === 'function' ? E.steps(n, false) : makeWorklet('function BetterAnimationsSteps(t){var c=this.__closure;return t>=1?1:Math.floor(t*c.n)/c.n;}', { n })
+}
+
+/** Reanimated 곡선 (UI 스레드에서 도는 곳에 넘길 것) */
+export function reaEasing(key: string) {
+    const E = Rea?.Easing
+    return E ? easingFrom(E, key, reaSteps(E)) : undefined
+}
+
 export function animationConfigFor(module: ModuleKey) {
     const m = active(module)
     if (!m || !Rea?.Easing || !reaTiming || !reaSpring) return
     const W = Dimensions.get('window')
-    const key = `${version}:${module}:${m.effect}:${m.duration}:${m.easing}:${W.width}x${W.height}`
+    const key = `${version}:${module}:${m.effect}:${m.duration}:${m.easing}:${m.exit}:${m.direction}:${m.position}:${W.width}x${W.height}`
     let ba = baCache.get(key)
     if (ba) return ba
     const E = Rea.Easing
     const spring = m.easing === 'spring'
+    const [w, hgt] = sizeOf(module, W.width, W.height)
+    const move = { direction: m.direction, position: m.position }
     ba = {
-        hidden: normalize(effectOf(module, m.effect).hidden),
+        hidden: applyMove(effectOf(module, m.effect).hidden, move, w, hgt),
+        exit: applyMove(exitEffectOf(module, m.effect, m.exit).hidden, move, w, hgt),
         spring,
         springCfg: springFor(m.duration, 0.55),
-        timing: { duration: m.duration, easing: spring ? E.linear : easingFrom(E, m.easing) },
+        timing: { duration: m.duration, easing: spring ? E.linear : easingFrom(E, m.easing, reaSteps(E)) },
         fade: { duration: Math.max(80, Math.round(m.duration * 0.75)), easing: E.out(E.quad) },
         W: W.width,
         H: W.height,
         t4: timing4,
         s4: spring4,
+        dim: 1,
     }
-    baCache.clear()
     baCache.set(key, ba)
+    if (baCache.size > 24) baCache.delete(baCache.keys().next().value as string)
     return ba
 }
+
+/** 배경 막 진하기: 기본 1, 단색이면 고른 값, 없음이면 0 */
+function backdropDim() {
+    const b = active('backdrop')
+    if (!b) return 1
+    if (b.effect === 'none') return 0
+    return Math.max(0, Math.min(1, b.amount ?? 0.6))
+}
+
+const BACKDROP_KINDS = new Set<Kind>(['alertBackdrop', 'menuBackdrop'])
 
 /** 디스코드 워클릿이면 우리 것으로 바꾼 워클릿을, 아니면 원래 것을 돌려준다 */
 export function swapWorklet(updater: any) {
@@ -196,9 +238,17 @@ export function swapWorklet(updater: any) {
     if (!closure || closure.BA) return updater
     const kind = kindOf(closure)
     if (!kind) return updater
-    if (!active(MODULE_OF[kind]) || !ensureReanimated()) return updater
-    const ba = animationConfigFor(MODULE_OF[kind])
+    const parent = MODULE_OF[kind]
+    const backdrop = BACKDROP_KINDS.has(kind)
+    // 배경 막은 그 창 효과를 바꿨거나, 배경 설정을 바꿨을 때
+    const module: ModuleKey | undefined = active(parent) ? parent : backdrop && active('backdrop') ? 'backdrop' : undefined
+    if (!module || !ensureReanimated()) return updater
+    let ba = animationConfigFor(module)
     if (!ba) return updater
+    if (backdrop) {
+        ba = { ...ba, dim: backdropDim() }
+        status.backdrops++
+    }
     ;(status as any)[COUNTER[kind]]++
     return makeWorklet(CODE_OF[kind], { ...closure, BA_withTiming: reaTiming, BA_withSpring: reaSpring, BA: ba })
 }

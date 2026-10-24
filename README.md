@@ -7,11 +7,10 @@
 | Plugin Backup | `yumistra.plugin-backup` | 플러그인·저장소·켜짐 상태·설정·데이터 파일(폰트·배경 등)을 백업하고 다시 불러오기 |
 | Overlay Background | `yumistra.overlay-background` | 포럼·스레드처럼 채팅 위에 덮이는 화면에도 테마 배경 이미지 표시 |
 | Toast Fix | `yumistra.toast-fix` | 옛날(Vendetta) 방식 알림을 띄우는 플러그인 때문에 앱이 튕기는 문제(`position` of undefined) 방지 |
-| Better Animations | `yumistra.better-animations` | 화면 전환·채널 화면 밀기·아래 창·팝업 메뉴·확인창·토스트·서버 폴더·작은 움직임 애니메이션을 골라서 바꾸기 (BetterDiscord BetterAnimations 모바일판) |
+| Better Animations | `yumistra.better-animations` | BetterDiscord BetterAnimations 모바일판. 채팅 메시지(나타나기·지워지기·밀리기, 네이티브), 화면 전환, 채널 화면 밀기, 채널 목록 접기, 서버 바꾸기, 서버 폴더, 아래 창, 팝업 메뉴, 확인창·배경, 토스트, 작은 움직임의 효과·나갈 때 효과·방향·위치·속도·곡선 바꾸기. 설치·업데이트 후 앱 재시작 |
 | Silent Leave | `yumistra.silent-leave` | 그룹 DM에서 `/leave-silent` 로 알림 없이 조용히 나가기 |
 | Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 두 번 누르면 반응 대신 수정·삭제 창 (테마 색 따라감) |
 | Edit Before Delete | `yumistra.edit-before-delete` | 내 메시지를 지울 때 먼저 `** **`로 수정한 뒤 삭제 |
-| Message Animations | `yumistra.message-animations` | 채팅에서 메시지가 나타날 때 애니메이션 (떠오르기·페이드·확대·플립 등). 네이티브 부분이 있어서 설치 후 앱을 다시 시작해야 함 |
 
 ## 설치
 

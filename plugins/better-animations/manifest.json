@@ -2,15 +2,19 @@
 	"format": 1,
 	"id": "yumistra.better-animations",
 	"name": "Better Animations",
-	"description": "화면 전환, 채널 화면 밀기, 아래 창, 팝업 메뉴, 확인창, 토스트, 서버 폴더, 작은 UI 움직임의 애니메이션을 고르고 속도·움직임을 바꿉니다. BetterDiscord의 BetterAnimations를 모바일에 맞게 옮겼습니다.",
+	"description": "BetterDiscord의 BetterAnimations를 모바일로 옮겼습니다. 채팅 메시지(나타나기·지워지기·밀리기), 화면 전환, 채널 화면 밀기, 채널 목록 접기, 서버 바꾸기, 서버 폴더, 아래 창, 팝업 메뉴, 확인창과 배경, 토스트, 작은 UI 움직임의 효과·나갈 때 효과·방향·위치·속도·곡선을 바꿉니다. 설치·업데이트 후 앱을 다시 시작하세요.",
 	"author": "Yumistra",
 	"icon": "MagicWandIcon",
-	"version": "1.2.0",
+	"version": "2.0.0",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}
 	},
 	"dist": {
-		"script": "index.js"
+		"script": "index.js",
+		"android": {
+			"path": "plugin.jar",
+			"class": "io.github.yumistra.betteranimations.BetterAnimationsPlugin"
+		}
 	}
 }

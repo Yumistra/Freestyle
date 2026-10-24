@@ -1,8 +1,8 @@
 import { getModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
-import { easingFrom, springFor, zetaOf } from '../effects'
+import { isSpringy, springFor, zetaOf } from '../effects'
 import { active, onSettingsChange, report, status } from '../settings'
-import { ensureReanimated, reanimated } from './worklets'
+import { ensureReanimated, reaEasing } from './worklets'
 
 /**
  * 디스코드가 모듈 상수로 들고 있는 애니메이션 설정을 바꾼다.
@@ -41,10 +41,10 @@ function setExport(mod: any, key: string, value: any) {
 }
 
 function timingOrSpring(duration: number, easing: any) {
-    if (easing === 'spring' || easing === 'bounce' || easing === 'elastic') return springFor(duration, zetaOf(easing))
-    const Easing = ensureReanimated() ? reanimated()?.Easing : undefined
-    if (!Easing) return springFor(duration, 1)
-    return { duration, easing: easingFrom(Easing, easing) }
+    if (isSpringy(easing)) return springFor(duration, zetaOf(easing))
+    const fn = ensureReanimated() ? reaEasing(easing) : undefined
+    if (!fn) return springFor(duration, 1)
+    return { duration, easing: fn }
 }
 
 export function applyConstants() {

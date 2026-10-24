@@ -1,10 +1,24 @@
-import { DEFAULT_ID, type EasingKey, type ModuleKey } from './effects'
+import { DEFAULT_ID, type Direction, type EasingKey, type ModuleKey, type Position } from './effects'
 
 export interface ModuleSettings {
     effect: string
     /** ms */
     duration: number
     easing: EasingKey
+    /** 나갈 때 효과 ('same' = 나타날 때와 같게) */
+    exit?: string
+    direction?: Direction
+    position?: Position
+    /** 메시지: 한꺼번에 나타날 때 차례로 보여 줄 간격 (ms) */
+    stagger?: number
+    /** 메시지: 채널을 열 때 보이는 메시지에도 */
+    onOpen?: boolean
+    /** 메시지: 메시지가 추가·삭제될 때 나머지가 부드럽게 밀리기 */
+    shift?: boolean
+    /** 메시지: 밀리는 시간 (ms) */
+    shiftDuration?: number
+    /** 배경: 진하기 (0~1, 디스코드 기본 대비) */
+    amount?: number
 }
 
 export interface Settings {
@@ -12,20 +26,39 @@ export interface Settings {
     modules: Record<ModuleKey, ModuleSettings>
 }
 
-export const MODULE_KEYS: ModuleKey[] = ['stack', 'push', 'modal', 'panel', 'sheet', 'menu', 'alert', 'toast', 'folder', 'subtle']
+export const MODULE_KEYS: ModuleKey[] = [
+    'messages',
+    'stack',
+    'push',
+    'modal',
+    'panel',
+    'channelList',
+    'servers',
+    'folder',
+    'sheet',
+    'menu',
+    'alert',
+    'backdrop',
+    'toast',
+    'subtle',
+]
 
 export const DEFAULTS: Settings = {
     enabled: true,
     modules: {
-        stack: { effect: 'slip', duration: 380, easing: 'expo' },
+        messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200 },
+        stack: { effect: 'slip', duration: 380, easing: 'expo', exit: 'same', direction: 'auto', position: 'auto' },
         push: { effect: 'default', duration: 300, easing: 'out' },
         modal: { effect: 'default', duration: 300, easing: 'out' },
-        sheet: { effect: 'default', duration: 380, easing: 'spring' },
-        menu: { effect: 'pop', duration: 300, easing: 'back' },
-        alert: { effect: 'zoom', duration: 380, easing: 'spring' },
-        toast: { effect: 'slide', duration: 380, easing: 'back' },
         panel: { effect: 'default', duration: 260, easing: 'expo' },
-        folder: { effect: 'drop', duration: 380, easing: 'spring' },
+        channelList: { effect: 'default', duration: 200, easing: 'smooth' },
+        servers: { effect: 'default', duration: 220, easing: 'out' },
+        folder: { effect: 'drop', duration: 380, easing: 'spring', exit: 'same', direction: 'auto', position: 'auto' },
+        sheet: { effect: 'default', duration: 380, easing: 'spring' },
+        menu: { effect: 'pop', duration: 300, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },
+        alert: { effect: 'zoom', duration: 380, easing: 'spring', exit: 'same', direction: 'auto', position: 'auto' },
+        backdrop: { effect: 'default', duration: 300, easing: 'out', amount: 0.6 },
+        toast: { effect: 'slide', duration: 380, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },
         subtle: { effect: 'default', duration: 260, easing: 'spring' },
     },
 }
@@ -82,8 +115,12 @@ export const status = {
     sheets: 0,
     menus: 0,
     alerts: 0,
+    backdrops: 0,
     toasts: 0,
     folders: 0,
+    layouts: 0,
+    /** 네이티브(메시지) 부분: null = 아직 확인 전 */
+    native: null as null | boolean,
     constants: [] as string[],
     found: {} as Record<string, boolean>,
     lastError: '',
