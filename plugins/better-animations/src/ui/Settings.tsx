@@ -423,6 +423,7 @@ function StatusRows() {
     const f = status.found
     const rows: Array<[string, string]> = [
         ['메시지 (네이티브)', status.native === null ? '확인 중' : status.native ? '실림' : '안 실림'],
+        ['화면 전환 (네이티브)', status.nativeScreenHook ? `맡음 · ${status.nativePlayed}회` : 'JS로 대신'],
         ['큰 화면·모달 (네이티브)', `효과 ${status.screens}회 · 뒤로 ${status.screenExits}회 · 전환 바꿈 ${status.nativeScreens}회`],
         ['설정·메뉴 화면', `${f.stack ? '연결됨' : '못 찾음'} · ${status.stack}회`],
         ['아래 창', `${f.sheets ? '연결됨' : '못 찾음'} · ${status.sheets}회`],

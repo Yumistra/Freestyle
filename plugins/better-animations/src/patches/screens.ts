@@ -5,6 +5,7 @@ import { createContext, createElement, isValidElement, useContext, useEffect, us
 import { Animated, BackHandler, DeviceEventEmitter, Dimensions, Easing } from 'react-native'
 import { easingFrom, effectOf, exitEffectOf, springFor } from '../effects'
 import { makeCardInterpolator } from '../interpolate'
+import { nativeScreens } from '../native'
 import { active, report, status } from '../settings'
 
 /**
@@ -53,6 +54,8 @@ interface Plan {
 
 function planFor(m: { effect: string; direction?: string }): Plan {
     if (m.effect === 'none') return { native: 'none', enter: false }
+    // 네이티브 부분이 화면 전환을 맡으면: 이 표시(ios_from_right)를 보고 열기·닫기·뒤 화면 모두 우리 효과로 바꾼다
+    if (nativeScreens()) return { native: 'ios_from_right', enter: false }
     const d = m.direction ?? 'auto'
     if (m.effect === 'slide' || m.effect === 'drawer') {
         const ios = m.effect === 'drawer'
