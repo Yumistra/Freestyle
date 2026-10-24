@@ -111,10 +111,22 @@ function Enter({ children, presentation, screenId }: { children?: any; presentat
                 run.stop()
                 setBusy(true)
                 anim.closing.setValue(1)
-                animate(p, 0, m, 0.85).start(({ finished }: any) => {
-                    // 중간에 끊기면(다른 이동 등) 닫지 않는다
-                    if (finished) done()
-                    else handle.exiting = false
+                // 닫기는 안드로이드 전환이 이어받으므로 짧게, 그리고 끝나기 전에 미리 닫기 시작해 겹치게 한다
+                const duration = Math.max(120, Math.min(260, Math.round(m.duration * 0.6)))
+                let closed = false
+                const close = () => {
+                    if (closed) return
+                    closed = true
+                    done()
+                }
+                const timer = setTimeout(close, Math.round(duration * 0.7))
+                animate(p, 0, { ...m, duration }).start(({ finished }: any) => {
+                    if (finished) close()
+                    else if (!closed) {
+                        // 중간에 끊기면(다른 이동 등) 닫지 않는다
+                        clearTimeout(timer)
+                        handle.exiting = false
+                    }
                 })
             },
         }
