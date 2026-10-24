@@ -12,6 +12,12 @@
 | Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 두 번 누르면 반응 대신 수정·삭제 창 (테마 색 따라감) |
 | Edit Before Delete | `yumistra.edit-before-delete` | 내 메시지를 지울 때 먼저 `** **`로 수정한 뒤 삭제 |
 
+`native/` 폴더의 플러그인은 Kotlin 부분이 있어서 저장소에 자동으로 올라가지 않아요. 각 폴더의 README 대로 직접 빌드해서 파일로 설치하세요.
+
+| 플러그인 (직접 빌드) | ID | 설명 |
+| --- | --- | --- |
+| Message Animations | `yumistra.message-animations` | 채팅에서 메시지가 나타날 때 애니메이션 (떠오르기·페이드·확대·플립 등) |
+
 ## 설치
 
 Revenge 설정 → 플러그인 → 저장소에 아래 주소를 추가하세요.
