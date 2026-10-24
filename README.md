@@ -9,7 +9,7 @@
 | Toast Fix | `yumistra.toast-fix` | 옛날(Vendetta) 방식 알림을 띄우는 플러그인 때문에 앱이 튕기는 문제(`position` of undefined) 방지 |
 | Better Animations | `yumistra.better-animations` | BetterDiscord BetterAnimations 모바일판. 채팅 메시지(나타나기·지워지기·밀리기, 네이티브), 화면 전환, 채널 화면 밀기, 채널 목록 접기, 서버 바꾸기, 서버 폴더, 아래 창, 팝업 메뉴, 확인창·배경, 토스트, 작은 움직임의 효과·나갈 때 효과·방향·위치·속도·곡선 바꾸기. 설치·업데이트 후 앱 재시작 |
 | Silent Leave | `yumistra.silent-leave` | 그룹 DM에서 `/leave-silent` 로 알림 없이 조용히 나가기 |
-| Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 두 번 누르면 반응 대신 수정·삭제 창 (테마 색 따라감) |
+| Double Tap Actions | `yumistra.double-tap-actions` | 내 메시지를 세게 당기면 메시지 밑에 수정·삭제 버튼, 두 번 누르면 수정·삭제 창 (설정에서 바꿈, 테마 색 따라감) |
 | Edit Before Delete | `yumistra.edit-before-delete` | 내 메시지를 지울 때 먼저 `** **`로 수정한 뒤 삭제 |
 
 ## 설치
