@@ -2,11 +2,25 @@
  * 애니메이션 종류 정의.
  *
  * 효과는 "숨은 상태"(hidden)만 적는다. 보이는 상태는 항상 원래 모습(투명도 1, 이동 0, 크기 1, 회전 0)이고,
- * 나타날 땐 hidden → 원래 모습, 사라질 땐 그 반대로 움직인다.
+ * 나타날 땐 hidden → 원래 모습, 사라질 땐 원래 모습 → (나갈 때 효과의) hidden 으로 움직인다.
  * 화면 전환은 아래에 깔리는 화면이 어떻게 변하는지(under)와 어둡게 덮는 정도(dim)도 적을 수 있다.
  */
 
-export type ModuleKey = 'stack' | 'push' | 'modal' | 'panel' | 'sheet' | 'menu' | 'alert' | 'toast' | 'folder' | 'subtle'
+export type ModuleKey =
+    | 'messages'
+    | 'stack'
+    | 'push'
+    | 'modal'
+    | 'panel'
+    | 'channelList'
+    | 'servers'
+    | 'folder'
+    | 'sheet'
+    | 'menu'
+    | 'alert'
+    | 'backdrop'
+    | 'toast'
+    | 'subtle'
 
 export interface Hidden {
     /** 투명도 */
@@ -26,7 +40,7 @@ export interface Hidden {
     ry?: number
     /** 팝업 메뉴: 누른 위치 쪽 모서리를 기준으로 커지고 작아짐 */
     anchor?: boolean
-    /** 토스트: 화면 가장자리 밖에서 들어옴 */
+    /** 토스트·폴더: 화면(또는 폴더) 가장자리 밖에서 들어옴 */
     edge?: boolean
 }
 
@@ -41,12 +55,37 @@ export interface Effect {
 }
 
 export const DEFAULT_ID = 'default'
+/** "나갈 때"에서 나타날 때와 같은 효과 */
+export const SAME_ID = 'same'
 
 export const NORMAL: Required<Omit<Hidden, 'anchor' | 'edge'>> = { o: 1, tx: 0, ty: 0, txW: 0, tyH: 0, s: 1, sy: 1, r: 0, rx: 0, ry: 0 }
+
+export type Normalized = ReturnType<typeof normalize>
 
 export function normalize(h: Hidden | undefined) {
     return { ...NORMAL, anchor: false, edge: false, ...(h ?? {}) }
 }
+
+// ── 메시지 (채팅에서 메시지가 나타나고 지워질 때, 네이티브) ─────────────────
+// 실제 값은 네이티브(Kotlin)에 같은 이름으로 있다. 여기 hidden 은 미리보기용 (px ≈ dp)
+export const MESSAGE_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본 (없음)' },
+    { id: 'rise', label: '떠오르기', hidden: { o: 0, ty: 28 } },
+    { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, tx: 40 } },
+    { id: 'slide', label: '슬라이드', hidden: { txW: 1 } },
+    { id: 'side', label: '왼쪽에서', hidden: { o: 0, tx: -48 } },
+    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.9 } },
+    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.6 } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.2 } },
+    { id: 'drop', label: '떨어지기', hidden: { o: 0, ty: 40, s: 0.92 } },
+    { id: 'flip', label: '플립', hidden: { o: 0, rx: 70 } },
+    { id: 'blur', label: '블러', hidden: { o: 0, s: 1.04 } },
+    { id: 'circle', label: '원형', hidden: { o: 0.3, s: 0.4 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 0.9, s: 1.25, r: 4 } },
+    { id: 'wave', label: '물결', hidden: { o: 0, ty: 22, r: -5 } },
+    { id: 'none', label: '없음' },
+]
 
 // ── 설정·메뉴 화면 (디스코드 안쪽 화면 전환) ─────────────────────────────
 export const STACK_EFFECTS: Effect[] = [
@@ -57,10 +96,13 @@ export const STACK_EFFECTS: Effect[] = [
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
     { id: 'scale', label: '확대', hidden: { o: 0, s: 0.86 }, under: { s: 1.06, o: 0 } },
     { id: 'zoom', label: '줌', hidden: { o: 0, s: 1.18 }, under: { s: 0.9, o: 0 } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 }, under: { o: 0.4, s: 0.96 } },
+    { id: 'circleScale', label: '원형 확대', hidden: { o: 0, s: 0.01 }, under: { s: 0.92 }, dim: 0.3 },
     { id: 'slideUp', label: '아래에서', hidden: { tyH: 1 }, under: { s: 0.94 }, dim: 0.3, gesture: 'vertical' },
     { id: 'rise', label: '떠오르기', hidden: { o: 0, tyH: 0.12 }, under: { o: 0.4 }, gesture: 'vertical' },
     { id: 'flip', label: '플립', hidden: { o: 0, ry: 75 }, under: { o: 0, ry: -75 } },
     { id: 'rotate', label: '회전', hidden: { o: 0, r: 10, tyH: 0.12, s: 0.92 }, under: { o: 0.3, s: 0.96 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.15, s: 1.3, r: 6 }, under: { txW: -0.2, s: 0.92 }, dim: 0.2 },
     { id: 'none', label: '없음' },
 ]
 
@@ -89,9 +131,12 @@ export const MENU_EFFECTS: Effect[] = [
     { id: 'default', label: '기본' },
     { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05, anchor: true } },
     { id: 'corner', label: '모서리에서', hidden: { o: 0, s: 0.5, anchor: true } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15, anchor: true } },
     { id: 'drop', label: '펼치기', hidden: { o: 0, sy: 0.2, anchor: true } },
-    { id: 'slide', label: '미끄러짐', hidden: { o: 0, ty: -18 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, ty: -18 } },
+    { id: 'slide', label: '옆에서', hidden: { o: 0, tx: 60 } },
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.85 } },
     { id: 'flip', label: '플립', hidden: { o: 0, rx: -80, anchor: true, s: 0.9 } },
 ]
 
@@ -100,13 +145,23 @@ export const ALERT_EFFECTS: Effect[] = [
     { id: 'default', label: '기본' },
     { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.7, ty: 50 } },
     { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
     { id: 'shrink', label: '축소', hidden: { o: 0, s: 1.3 } },
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 40 } },
     { id: 'slideUp', label: '아래에서', hidden: { o: 0, tyH: 0.55 } },
     { id: 'slideDown', label: '위에서', hidden: { o: 0, tyH: -0.55 } },
     { id: 'side', label: '옆에서', hidden: { o: 0, txW: 1 } },
     { id: 'flip', label: '플립', hidden: { o: 0, rx: 80, s: 0.9 } },
     { id: 'rotate', label: '회전', hidden: { o: 0, r: -14, s: 0.6 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { tyH: 1.1, r: -10, s: 1.2 } },
+]
+
+// ── 배경 (확인창·팝업 메뉴 뒤를 어둡게 덮는 막) ───────────────────────────
+export const BACKDROP_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본' },
+    { id: 'solid', label: '단색' },
+    { id: 'none', label: '없음' },
 ]
 
 // ── 토스트 (화면 위아래 작은 알림) ─────────────────────────────────────
@@ -114,17 +169,34 @@ export const TOAST_EFFECTS: Effect[] = [
     { id: 'default', label: '기본' },
     { id: 'slide', label: '밀려오기', hidden: { o: 0, edge: true } },
     { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, ty: 36, s: 0.9 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 16 } },
     { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
     { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.6 } },
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
     { id: 'side', label: '옆에서', hidden: { o: 0, txW: -1 } },
     { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.1, r: 8 } },
 ]
 
 // ── 채널 화면 밀기 (채널 목록 ↔ 채팅) ──────────────────────────────
 export const PANEL_EFFECTS: Effect[] = [
     { id: 'default', label: '기본' },
     { id: 'custom', label: '직접 설정', hidden: { txW: 0.82 } },
+]
+
+// ── 채널 목록 (카테고리 접기·펼치기) ─────────────────────────────────
+export const CHANNEL_LIST_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본 (바로)' },
+    { id: 'smooth', label: '부드럽게', hidden: { o: 0 } },
+    { id: 'scale', label: '부드럽게 + 확대', hidden: { o: 0, s: 0.6 } },
+]
+
+// ── 서버 바꾸기 (서버를 누르면 채널 목록이 바뀔 때) ────────────────────────
+export const SERVER_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본 (바로)' },
+    { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.6 } },
 ]
 
 // ── 서버 폴더 열고 닫기 ──────────────────────────────────────────
@@ -137,6 +209,7 @@ export const FOLDER_EFFECTS: Effect[] = [
     { id: 'side', label: '옆에서', hidden: { o: 0, tx: -48 } },
     { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
     { id: 'rotate', label: '회전', hidden: { o: 0, r: -120, s: 0.3 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { tx: -120, s: 1.4 } },
 ]
 
 // ── 작은 움직임 (체크박스·라디오·버튼 등 디스코드 공통 스프링) ─────────────
@@ -146,7 +219,10 @@ export const SUBTLE_EFFECTS: Effect[] = [
 ]
 
 export const EFFECTS: Record<ModuleKey, Effect[]> = {
+    messages: MESSAGE_EFFECTS,
     panel: PANEL_EFFECTS,
+    channelList: CHANNEL_LIST_EFFECTS,
+    servers: SERVER_EFFECTS,
     folder: FOLDER_EFFECTS,
     subtle: SUBTLE_EFFECTS,
     stack: STACK_EFFECTS,
@@ -155,27 +231,134 @@ export const EFFECTS: Record<ModuleKey, Effect[]> = {
     sheet: SHEET_EFFECTS,
     menu: MENU_EFFECTS,
     alert: ALERT_EFFECTS,
+    backdrop: BACKDROP_EFFECTS,
     toast: TOAST_EFFECTS,
 }
 
 export const effectOf = (module: ModuleKey, id: string): Effect => EFFECTS[module].find(e => e.id === id) ?? EFFECTS[module][0]
 
+/** 나갈 때 효과로 고를 수 있는 것: "같게" + 기본·없음을 뺀 효과들 */
+export function exitChoices(module: ModuleKey): Effect[] {
+    return [{ id: SAME_ID, label: '나타날 때와 같게' }, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
+}
+
+/** 나갈 때 쓸 효과. "같게"이거나 모르는 값이면 나타날 때 효과 */
+export function exitEffectOf(module: ModuleKey, enter: string, exit: string | undefined): Effect {
+    if (!exit || exit === SAME_ID) return effectOf(module, enter)
+    return EFFECTS[module].find(e => e.id === exit) ?? effectOf(module, enter)
+}
+
 /** 미리보기에서 "기본"을 보여 줄 때 쓰는 디스코드 기본 동작의 근사치 */
 export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: number; easing: EasingKey }> = {
+    messages: { effect: 'none', duration: 0, easing: 'linear' },
     stack: { effect: 'slide', duration: 350, easing: 'out' },
     push: { effect: 'fade_from_bottom', duration: 300, easing: 'out' },
     modal: { effect: 'slide_from_bottom', duration: 350, easing: 'out' },
     sheet: { effect: 'custom', duration: 400, easing: 'out' },
     menu: { effect: 'corner', duration: 250, easing: 'out' },
     alert: { effect: 'zoom', duration: 400, easing: 'spring' },
+    backdrop: { effect: 'solid', duration: 300, easing: 'out' },
     toast: { effect: 'slide', duration: 250, easing: 'linear' },
     panel: { effect: 'custom', duration: 250, easing: 'out' },
+    channelList: { effect: 'none', duration: 0, easing: 'linear' },
+    servers: { effect: 'none', duration: 0, easing: 'linear' },
     folder: { effect: 'drop', duration: 350, easing: 'smooth' },
     subtle: { effect: 'custom', duration: 220, easing: 'smooth' },
 }
 
+// ── 방향 · 위치 (BetterDiscord 의 Direction / Position) ─────────────────
+
+export type Direction = 'auto' | 'up' | 'down' | 'left' | 'right' | 'toward' | 'away'
+export type Position = 'auto' | 'tl' | 't' | 'tr' | 'l' | 'c' | 'r' | 'bl' | 'b' | 'br'
+
+export const DIRECTIONS: Array<{ id: Direction; label: string }> = [
+    { id: 'auto', label: '효과대로' },
+    { id: 'up', label: '위로' },
+    { id: 'down', label: '아래로' },
+    { id: 'left', label: '왼쪽으로' },
+    { id: 'right', label: '오른쪽으로' },
+    { id: 'toward', label: '다가오기' },
+    { id: 'away', label: '멀어지기' },
+]
+
+export const POSITIONS: Array<{ id: Position; label: string }> = [
+    { id: 'auto', label: '자동' },
+    { id: 'tl', label: '↖' },
+    { id: 't', label: '↑' },
+    { id: 'tr', label: '↗' },
+    { id: 'l', label: '←' },
+    { id: 'c', label: '가운데' },
+    { id: 'r', label: '→' },
+    { id: 'bl', label: '↙' },
+    { id: 'b', label: '↓' },
+    { id: 'br', label: '↘' },
+]
+
+const POS_XY: Record<Exclude<Position, 'auto'>, [number, number]> = {
+    tl: [-1, -1],
+    t: [0, -1],
+    tr: [1, -1],
+    l: [-1, 0],
+    c: [0, 0],
+    r: [1, 0],
+    bl: [-1, 1],
+    b: [0, 1],
+    br: [1, 1],
+}
+
+export interface MoveOptions {
+    direction?: Direction
+    position?: Position
+}
+
+/**
+ * 효과의 숨은 상태에 방향·위치 설정을 덧씌운다.
+ *  - 방향: 효과의 이동(또는 뒤집기)을 고른 쪽으로 돌린다. "위로" = 아래에서 위로 올라오며 나타남.
+ *    이동이 없는 효과(페이드 등)는 조금 이동을 더한다. 다가오기/멀어지기는 크기로.
+ *  - 위치: 커지고 작아지는 기준점. (W, H) 는 움직이는 대상의 크기
+ */
+export function applyMove(hidden: Hidden | undefined, opts: MoveOptions | undefined, W: number, H: number): Normalized {
+    const h = normalize(hidden)
+    const dir = opts?.direction ?? 'auto'
+    const pos = opts?.position ?? 'auto'
+    if (dir !== 'auto') {
+        if (dir === 'toward' || dir === 'away') {
+            const d = Math.abs(1 - h.s) || 0.15
+            h.s = dir === 'toward' ? Math.max(0.01, 1 - d) : 1 + d
+        } else {
+            const flip = (h.rx || h.ry) && !h.tx && !h.ty && !h.txW && !h.tyH
+            if (flip) {
+                const m = Math.max(Math.abs(h.rx), Math.abs(h.ry))
+                h.rx = dir === 'up' ? m : dir === 'down' ? -m : 0
+                h.ry = dir === 'left' ? -m : dir === 'right' ? m : 0
+            } else {
+                // 비율로 적힌 이동은 비율로, px 로 적힌 이동은 px 로 유지한다
+                const fr = Math.max(Math.abs(h.txW), Math.abs(h.tyH))
+                const px = Math.max(Math.abs(h.tx), Math.abs(h.ty)) || (fr ? 0 : 30)
+                const vertical = dir === 'up' || dir === 'down'
+                // "위로" 나타나려면 아래(+)에서 출발
+                const sign = dir === 'up' || dir === 'left' ? 1 : -1
+                h.txW = vertical ? 0 : sign * fr
+                h.tyH = vertical ? sign * fr : 0
+                h.tx = vertical ? 0 : sign * px
+                h.ty = vertical ? sign * px : 0
+            }
+        }
+    }
+    if (pos !== 'auto') {
+        // (px, py) 를 기준으로 s 배 = 가운데 기준 s 배 + (px, py)·(1 - s) 만큼 이동
+        const [ox, oy] = POS_XY[pos]
+        h.tx += (ox * W) / 2 * (1 - h.s)
+        h.ty += (oy * H) / 2 * (1 - h.s * h.sy)
+        h.anchor = false
+    }
+    return h
+}
+
 // ── 움직임(가속 곡선) ────────────────────────────────────────────
-export type EasingKey = 'out' | 'expo' | 'smooth' | 'linear' | 'back' | 'bounce' | 'elastic' | 'spring'
+// 미리 만든 것: out, expo, smooth, linear, back, spring, bounce, elastic
+// 직접 만든 것: "c:<종류>:<방향>:<모양>:<세기>"  (BetterDiscord Easing 과 같은 구성)
+export type EasingKey = string
 
 export const EASINGS: Array<{ id: EasingKey; label: string }> = [
     { id: 'out', label: '감속' },
@@ -188,8 +371,102 @@ export const EASINGS: Array<{ id: EasingKey; label: string }> = [
     { id: 'elastic', label: '고무줄' },
 ]
 
+export type EasingType = 'linear' | 'ease' | 'back' | 'elastic' | 'steps'
+export type EasingBezier = 'in' | 'out' | 'inOut'
+export type EasingStyle = 'sine' | 'quad' | 'cubic' | 'quart' | 'quint' | 'circ' | 'expo' | 'bounce'
+
+export interface CustomEasing {
+    type: EasingType
+    bezier: EasingBezier
+    style: EasingStyle
+    /** back: 튕기는 정도, elastic: 출렁임, steps: 단계 수 */
+    amount: number
+}
+
+export const EASING_TYPES: Array<{ id: EasingType; label: string }> = [
+    { id: 'linear', label: '일정' },
+    { id: 'ease', label: '곡선' },
+    { id: 'back', label: '튕김' },
+    { id: 'elastic', label: '고무줄' },
+    { id: 'steps', label: '계단' },
+]
+export const EASING_BEZIERS: Array<{ id: EasingBezier; label: string }> = [
+    { id: 'in', label: '점점 빠르게 (In)' },
+    { id: 'out', label: '점점 느리게 (Out)' },
+    { id: 'inOut', label: '양쪽 (In Out)' },
+]
+export const EASING_STYLES: Array<{ id: EasingStyle; label: string }> = [
+    { id: 'sine', label: 'Sine' },
+    { id: 'quad', label: 'Quad' },
+    { id: 'cubic', label: 'Cubic' },
+    { id: 'quart', label: 'Quart' },
+    { id: 'quint', label: 'Quint' },
+    { id: 'circ', label: 'Circ' },
+    { id: 'expo', label: 'Expo' },
+    { id: 'bounce', label: 'Bounce' },
+]
+
+export const AMOUNT_RANGE: Record<'back' | 'elastic' | 'steps', { min: number; max: number; step: number; def: number }> = {
+    back: { min: 0.5, max: 4, step: 0.1, def: 1.7 },
+    elastic: { min: 0.3, max: 3, step: 0.1, def: 1 },
+    steps: { min: 2, max: 20, step: 1, def: 5 },
+}
+
+export const isCustomEasing = (key: EasingKey) => typeof key === 'string' && key.startsWith('c:')
+
+export function encodeEasing(c: CustomEasing): EasingKey {
+    return `c:${c.type}:${c.bezier}:${c.style}:${Math.round(c.amount * 100) / 100}`
+}
+
+/** 미리 만든 것도 직접 만든 형태로 풀어 준다 (편집기 처음 값) */
+export function decodeEasing(key: EasingKey): CustomEasing {
+    if (isCustomEasing(key)) {
+        const [, type, bezier, style, amount] = key.split(':')
+        return {
+            type: (EASING_TYPES.some(t => t.id === type) ? type : 'ease') as EasingType,
+            bezier: (EASING_BEZIERS.some(b => b.id === bezier) ? bezier : 'out') as EasingBezier,
+            style: (EASING_STYLES.some(s => s.id === style) ? style : 'cubic') as EasingStyle,
+            amount: Number(amount) || 1,
+        }
+    }
+    switch (key) {
+        case 'linear':
+            return { type: 'linear', bezier: 'out', style: 'cubic', amount: 1 }
+        case 'smooth':
+            return { type: 'ease', bezier: 'inOut', style: 'cubic', amount: 1 }
+        case 'expo':
+            return { type: 'ease', bezier: 'out', style: 'expo', amount: 1 }
+        case 'back':
+            return { type: 'back', bezier: 'out', style: 'cubic', amount: 1.7 }
+        case 'bounce':
+            return { type: 'ease', bezier: 'out', style: 'bounce', amount: 1 }
+        case 'elastic':
+            return { type: 'elastic', bezier: 'out', style: 'cubic', amount: 1.1 }
+        default:
+            return { type: 'ease', bezier: 'out', style: 'cubic', amount: 1 }
+    }
+}
+
+export function easingLabel(key: EasingKey) {
+    const preset = EASINGS.find(e => e.id === key)
+    if (preset) return preset.label
+    const c = decodeEasing(key)
+    if (c.type === 'linear') return '직접 · 일정'
+    if (c.type === 'steps') return `직접 · 계단 ${c.amount}`
+    const bez = c.bezier === 'inOut' ? 'In Out' : c.bezier === 'in' ? 'In' : 'Out'
+    const name = c.type === 'ease' ? EASING_STYLES.find(s => s.id === c.style)?.label : c.type === 'back' ? 'Back' : 'Elastic'
+    return `직접 · ${name} ${bez}`
+}
+
 /** 스프링만 쓸 수 있는 곳에서 고른 움직임을 감쇠비로 바꾼다 (작을수록 출렁임) */
 export function zetaOf(key: EasingKey) {
+    if (isCustomEasing(key)) {
+        const c = decodeEasing(key)
+        if (c.type === 'back') return 0.7
+        if (c.type === 'elastic') return Math.max(0.12, 0.3 / c.amount)
+        if (c.type === 'ease' && c.style === 'bounce') return 0.35
+        return 1
+    }
     switch (key) {
         case 'spring':
             return 0.55
@@ -204,8 +481,58 @@ export function zetaOf(key: EasingKey) {
     }
 }
 
+/** 타이밍 대신 스프링으로 돌려야 자연스러운 움직임인지 (스프링만 받는 곳에서) */
+export const isSpringy = (key: EasingKey) => key === 'spring' || zetaOf(key) < 0.5
+
+/** "점점 빠르게" 모양의 기본 곡선 */
+function styleIn(E: any, style: EasingStyle) {
+    switch (style) {
+        case 'sine':
+            return E.sin
+        case 'quad':
+            return E.quad
+        case 'quart':
+            return E.poly(4)
+        case 'quint':
+            return E.poly(5)
+        case 'circ':
+            return E.circle
+        case 'expo':
+            return E.exp
+        case 'bounce':
+            // E.bounce 는 끝에서 통통 튀는 모양(Out)이라 뒤집어서 In 으로
+            return E.out(E.bounce)
+        default:
+            return E.cubic
+    }
+}
+
+function wrap(E: any, bezier: EasingBezier, f: any) {
+    return bezier === 'in' ? E.in(f) : bezier === 'inOut' ? E.inOut(f) : E.out(f)
+}
+
+/** 계단 곡선. Reanimated 는 워클릿이어야 해서 만드는 쪽을 넘겨받는다 */
+export type StepsMaker = (n: number) => any
+const jsSteps: StepsMaker = n => (t: number) => (t >= 1 ? 1 : Math.floor(t * n) / n)
+
 /** Easing 모듈(react-native 또는 reanimated)로 곡선 함수를 만든다. 두 라이브러리 API가 같다 */
-export function easingFrom(E: any, key: EasingKey) {
+export function easingFrom(E: any, key: EasingKey, steps: StepsMaker = jsSteps) {
+    if (isCustomEasing(key)) {
+        const c = decodeEasing(key)
+        switch (c.type) {
+            case 'linear':
+                return E.linear
+            case 'steps':
+                return steps(Math.max(1, Math.round(c.amount)))
+            case 'back':
+                return wrap(E, c.bezier, E.back(c.amount))
+            case 'elastic':
+                // E.elastic 은 끝에서 출렁이는 모양(Out)이라 뒤집어서 In 으로
+                return wrap(E, c.bezier, E.out(E.elastic(c.amount)))
+            default:
+                return wrap(E, c.bezier, styleIn(E, c.style))
+        }
+    }
     switch (key) {
         case 'linear':
             return E.linear
@@ -216,9 +543,9 @@ export function easingFrom(E: any, key: EasingKey) {
         case 'back':
             return E.out(E.back(1.7))
         case 'bounce':
-            return E.out(E.bounce)
+            return E.bounce
         case 'elastic':
-            return E.out(E.elastic(1.1))
+            return E.elastic(1.1)
         default:
             return E.out(E.cubic)
     }

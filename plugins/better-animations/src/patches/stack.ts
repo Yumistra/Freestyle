@@ -1,6 +1,6 @@
 import { ReactNavigationStack } from '@revenge-mod/externals/react-navigation'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
-import { effectOf } from '../effects'
+import { effectOf, exitEffectOf } from '../effects'
 import { makeCardInterpolator, noAnimation, transitionSpecFor } from '../interpolate'
 import { active, report, status, version } from '../settings'
 
@@ -15,7 +15,7 @@ let cache: { key: string; options: any } | undefined
 function overrides() {
     const m = active('stack')
     if (!m) return
-    const key = `${version}:${m.effect}:${m.duration}:${m.easing}`
+    const key = `${version}:${m.effect}:${m.duration}:${m.easing}:${m.exit}:${m.direction}:${m.position}`
     if (cache?.key === key) return cache.options
 
     let options: any
@@ -26,7 +26,10 @@ function overrides() {
         const effect = effectOf('stack', m.effect)
         const spec = transitionSpecFor(m.duration, m.easing)
         options = {
-            cardStyleInterpolator: makeCardInterpolator(effect),
+            cardStyleInterpolator: makeCardInterpolator(effect, {
+                exit: exitEffectOf('stack', m.effect, m.exit),
+                move: { direction: m.direction, position: m.position },
+            }),
             transitionSpec: { open: spec, close: spec },
             gestureDirection: effect.gesture ?? 'horizontal',
             cardOverlayEnabled: !!effect.dim,

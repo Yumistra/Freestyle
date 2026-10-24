@@ -1,8 +1,8 @@
 import { BottomSheet } from '@revenge-mod/externals/gorhom'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
-import { easingFrom, springFor } from '../effects'
+import { springFor } from '../effects'
 import { active, report, status, version } from '../settings'
-import { ensureReanimated, reanimated } from './worklets'
+import { ensureReanimated, reaEasing } from './worklets'
 
 /**
  * 아래 창(액션시트)은 @gorhom/bottom-sheet 다. animationConfigs 에
@@ -23,9 +23,9 @@ function config() {
         // duration 이 있으면 gorhom 이 타이밍으로 여기므로, 물리 값만 넘긴다
         cfg = springFor(m.duration, 0.7)
     } else {
-        const Easing = ensureReanimated() ? reanimated()?.Easing : undefined
-        if (!Easing) return
-        cfg = { duration: m.duration, easing: easingFrom(Easing, m.easing) }
+        const easing = ensureReanimated() ? reaEasing(m.easing) : undefined
+        if (!easing) return
+        cfg = { duration: m.duration, easing }
     }
     cache = { key, config: cfg }
     return cfg
