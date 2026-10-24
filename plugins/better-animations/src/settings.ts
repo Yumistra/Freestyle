@@ -116,6 +116,7 @@ export async function save(next: Settings) {
 export const status = {
     screens: 0,
     nativeScreens: 0,
+    screenExits: 0,
     stack: 0,
     sheets: 0,
     menus: 0,

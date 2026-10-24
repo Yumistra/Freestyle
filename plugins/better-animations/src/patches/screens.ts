@@ -1,9 +1,9 @@
-import { getModules } from '@revenge-mod/modules/finders'
+import { getModules, lookupModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
 import { createContext, createElement, isValidElement, useContext, useEffect, useState } from 'react'
-import { Animated, Dimensions, Easing } from 'react-native'
-import { easingFrom, effectOf, springFor } from '../effects'
+import { Animated, BackHandler, DeviceEventEmitter, Dimensions, Easing } from 'react-native'
+import { easingFrom, effectOf, exitEffectOf, springFor } from '../effects'
 import { makeCardInterpolator } from '../interpolate'
 import { active, report, status } from '../settings'
 
@@ -74,28 +74,132 @@ function Enter({ children, presentation, screenId }: { children?: any; presentat
         if (!m || first || !planFor(m).enter) return undefined
         const { width, height } = Dimensions.get('window')
         const p = new Animated.Value(0)
-        const { opacity: _, ...style } = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({
+        // 닫히는 중이면 1 (뒤로 가기에서 나갈 때 효과를 재생할 때)
+        const closing = new Animated.Value(0)
+        const { opacity, ...style } = makeCardInterpolator(effectOf('stack', m.effect), {
+            exit: exitEffectOf('stack', m.effect, m.exit),
+            move: { direction: m.direction, position: m.position },
+        })({
             current: { progress: p },
             inverted: one,
             layouts: { screen: { width, height } },
+            closing,
         }).cardStyle
-        // 투명도는 안드로이드 페이드가 맡는다 (두 번 흐려지지 않게)
-        return { m, p, style }
+        // 나타날 땐 투명도를 안드로이드 페이드가 맡고(두 번 흐려지지 않게), 나갈 땐 우리가 흐리게 한다
+        if (opacity) (style as any).opacity = Animated.add(Animated.multiply(opacity, closing), Animated.subtract(1, closing))
+        return { m, p, style, closing }
     })
     const [busy, setBusy] = useState(!!anim)
     useEffect(() => {
-        if (!anim) return
+        // 효과가 없는 화면도 순서에 넣어 둔다 (그 화면이 맨 위면 뒤로 가기를 건드리지 않게)
+        if (!anim) {
+            const plain: ExitHandle = { exiting: false }
+            mounted.push(plain)
+            return () => {
+                const i = mounted.indexOf(plain)
+                if (i >= 0) mounted.splice(i, 1)
+            }
+        }
         status.screens++
         const { m, p } = anim
-        const run =
-            m.easing === 'spring'
-                ? Animated.spring(p, { toValue: 1, ...springFor(m.duration, 0.7), useNativeDriver: true } as any)
-                : Animated.timing(p, { toValue: 1, duration: m.duration, easing: easingFrom(Easing, m.easing), useNativeDriver: true })
+        const run = animate(p, 1, m)
         run.start(() => setBusy(false))
-        return () => run.stop()
+        const handle: ExitHandle = {
+            exiting: false,
+            exit(done) {
+                handle.exiting = true
+                run.stop()
+                setBusy(true)
+                anim.closing.setValue(1)
+                animate(p, 0, m, 0.85).start(({ finished }: any) => {
+                    // 중간에 끊기면(다른 이동 등) 닫지 않는다
+                    if (finished) done()
+                    else handle.exiting = false
+                })
+            },
+        }
+        mounted.push(handle)
+        ensureBackHandler()
+        return () => {
+            run.stop()
+            const i = mounted.indexOf(handle)
+            if (i >= 0) mounted.splice(i, 1)
+        }
     }, [])
     // 움직이는 동안만 GPU 텍스처로 그려서 버벅임을 줄인다
     return createElement(Animated.View, { style: anim ? [{ flex: 1 }, anim.style] : { flex: 1 }, collapsable: false, renderToHardwareTextureAndroid: busy }, children)
+}
+
+function animate(p: Animated.Value, to: number, m: { duration: number; easing: string }, speed = 1) {
+    const duration = Math.round(m.duration * speed)
+    return m.easing === 'spring'
+        ? Animated.spring(p, { toValue: to, ...springFor(duration, 0.7), useNativeDriver: true } as any)
+        : Animated.timing(p, { toValue: to, duration, easing: easingFrom(Easing, m.easing), useNativeDriver: true })
+}
+
+// ── 뒤로 가기 (안드로이드 내비게이션 바) ─────────────────────────────
+// 네이티브 화면은 닫히는 순간 JS 가 끼어들 수 없어서, 뒤로 가기를 먼저 받아 나갈 때 효과를 재생한 뒤 닫는다
+
+interface ExitHandle {
+    exiting: boolean
+    exit?(done: () => void): void
+}
+
+/** 효과가 걸린 채 열려 있는 화면들 (나중에 열린 게 위) */
+const mounted: ExitHandle[] = []
+let backSub: { remove(): void } | undefined
+let replaying = false
+
+function goBack() {
+    try {
+        for (const [mod] of lookupModules(withProps('getRootNavigationRef') as any) as any) {
+            const ref = mod?.getRootNavigationRef?.()
+            if (ref?.canGoBack?.()) {
+                ref.goBack()
+                return
+            }
+        }
+    } catch (e) {
+        report('back', e)
+    }
+    // 못 찾으면 뒤로 가기를 한 번 더 흘려보낸다 (이번엔 우리가 건너뛴다)
+    replaying = true
+    try {
+        DeviceEventEmitter.emit('hardwareBackPress')
+    } finally {
+        replaying = false
+    }
+}
+
+function onBack() {
+    if (replaying) return false
+    const top = mounted[mounted.length - 1]
+    if (!top?.exit) return false
+    if (top.exiting) return true
+    try {
+        top.exit(goBack)
+        status.screenExits++
+        return true
+    } catch (e) {
+        report('back', e)
+        return false
+    }
+}
+
+/** 디스코드(react-navigation)의 뒤로 가기 처리보다 먼저 불리게, 화면이 처음 열릴 때 등록한다 */
+function ensureBackHandler() {
+    if (backSub) return
+    try {
+        backSub = BackHandler.addEventListener('hardwareBackPress', onBack) as any
+    } catch (e) {
+        report('back', e)
+    }
+}
+
+export function removeBackHandler() {
+    backSub?.remove()
+    backSub = undefined
+    mounted.length = 0
 }
 
 /** 네이티브 전환 종류 */
@@ -112,6 +216,7 @@ function wrapStackChildren(children: any) {
 }
 
 export function patchNativeScreens(cleanup: (...fns: Array<() => unknown>) => void) {
+    cleanup(removeBackHandler)
     cleanup(
         beforeJSX('RNSScreen' as any, (args: any[]) => {
             try {

@@ -73,7 +73,7 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
     },
     servers: {
         title: '서버 바꾸기',
-        description: '다른 서버를 눌러 채널 목록이 바뀔 때 채널 목록이 나타나는 효과',
+        description: '다른 서버나 DM을 눌러 채널 목록·DM 목록이 바뀔 때 나타나는 효과',
         move: true,
     },
     folder: { title: '서버 폴더', description: '서버 목록에서 폴더를 열고 닫을 때 서버 아이콘이 나타나는 모습과 펼쳐지는 속도', exit: true, move: true },
@@ -423,7 +423,7 @@ function StatusRows() {
     const f = status.found
     const rows: Array<[string, string]> = [
         ['메시지 (네이티브)', status.native === null ? '확인 중' : status.native ? '실림' : '안 실림'],
-        ['큰 화면·모달 (네이티브)', `효과 ${status.screens}회 · 전환 바꿈 ${status.nativeScreens}회`],
+        ['큰 화면·모달 (네이티브)', `효과 ${status.screens}회 · 뒤로 ${status.screenExits}회 · 전환 바꿈 ${status.nativeScreens}회`],
         ['설정·메뉴 화면', `${f.stack ? '연결됨' : '못 찾음'} · ${status.stack}회`],
         ['아래 창', `${f.sheets ? '연결됨' : '못 찾음'} · ${status.sheets}회`],
         ['Reanimated', `${f.worklets ? '연결됨' : '못 찾음'} · ${f.reanimated ? '준비됨' : '대기 중'}`],

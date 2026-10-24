@@ -21,7 +21,8 @@ import { active, report, status, type ModuleSettings } from '../settings'
  * (BetterDiscord 의 Servers 모듈)
  */
 
-const CHANNEL_LIST_PATH = 'modules/channel_list_v2/native/RedesignChannelList.tsx'
+/** 서버의 채널 목록, DM 목록 */
+const LIST_PATHS = ['modules/channel_list_v2/native/RedesignChannelList.tsx', 'modules/main_tabs_v2/native/tabs/messages/MessagesFastestList.tsx']
 /** 감싸기를 못 하면 LayoutAnimation 으로라도 */
 let wrapped = false
 /** 마지막으로 본 서버 (채널 목록이 서버마다 새로 만들어져도 바뀐 걸 알 수 있게) */
@@ -81,25 +82,29 @@ function GuildSwitch({ __type, __props }: { __type: any; __props: any }) {
 }
 
 export function patchServerSwitch(cleanup: (...fns: Array<() => unknown>) => void) {
-    cleanup(
-        getModuleWithImportedPath(CHANNEL_LIST_PATH, (exports: any) => {
-            const ChannelList = exports?.default ?? exports
-            if (!ChannelList || wrapped) return
-            wrapped = true
-            status.found.servers = true
-            cleanup(
-                beforeJSX(ChannelList, (args: any[]) => {
-                    try {
-                        if (!active('servers')) return args as any
-                        return [GuildSwitch, { __type: args[0], __props: args[1] }, ...args.slice(2)] as any
-                    } catch (e) {
-                        report('servers', e)
-                        return args as any
-                    }
-                }),
-            )
-        }) as any,
-    )
+    const done = new Set<any>()
+    for (const path of LIST_PATHS) {
+        cleanup(
+            getModuleWithImportedPath(path, (exports: any) => {
+                const List = exports?.default ?? exports
+                if (!List || done.has(List)) return
+                done.add(List)
+                wrapped = true
+                status.found.servers = true
+                cleanup(
+                    beforeJSX(List, (args: any[]) => {
+                        try {
+                            if (!active('servers')) return args as any
+                            return [GuildSwitch, { __type: args[0], __props: args[1] }, ...args.slice(2)] as any
+                        } catch (e) {
+                            report('servers', e)
+                            return args as any
+                        }
+                    }),
+                )
+            }) as any,
+        )
+    }
 }
 
 const COLLAPSE = new Set(['CATEGORY_COLLAPSE', 'CATEGORY_EXPAND', 'CATEGORY_COLLAPSE_ALL', 'CATEGORY_EXPAND_ALL'])
