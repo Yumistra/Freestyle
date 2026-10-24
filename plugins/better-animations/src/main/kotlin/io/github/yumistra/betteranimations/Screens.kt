@@ -2,6 +2,7 @@ package io.github.yumistra.betteranimations
 
 import android.content.Context
 import android.graphics.Camera
+import android.view.View
 import android.view.animation.Animation
 import android.view.animation.Interpolator
 import android.view.animation.Transformation
@@ -180,7 +181,37 @@ internal class ScreenTransitions(
     var played = 0
         private set
 
-    fun hook(): XC_MethodHook.Unhook? {
+    /** 움직이는 동안만 화면을 GPU 레이어로 그려서 버벅이지 않게 */
+    private fun hookLayer(): XC_MethodHook.Unhook? = try {
+        XposedHelpers.findAndHookMethod(
+            "com.swmansion.rnscreens.stack.views.ScreensCoordinatorLayout",
+            classLoader,
+            "startAnimation",
+            Animation::class.java,
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val anim = param.args[0] as? PoseAnimation ?: return
+                    val view = param.thisObject as? View ?: return
+                    try {
+                        if (view.layerType != View.LAYER_TYPE_HARDWARE) {
+                            view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                            view.postDelayed({ view.setLayerType(View.LAYER_TYPE_NONE, null) }, anim.duration + anim.startOffset + 80L)
+                        }
+                    } catch (e: Throwable) {
+                    }
+                }
+            },
+        )
+    } catch (e: Throwable) {
+        null
+    }
+
+    fun hook(): List<XC_MethodHook.Unhook>? {
+        val main = hookAnimation() ?: return null
+        return listOfNotNull(main, hookLayer())
+    }
+
+    private fun hookAnimation(): XC_MethodHook.Unhook? {
         val cls = findStackFragment(classLoader) ?: return null
         return XposedHelpers.findAndHookMethod(
             cls,

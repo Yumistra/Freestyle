@@ -50,7 +50,7 @@ export const DEFAULTS: Settings = {
     enabled: true,
     modules: {
         messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200 },
-        stack: { effect: 'slip', duration: 380, easing: 'expo', exit: 'same', direction: 'auto', position: 'auto', modals: true },
+        stack: { effect: 'slip', duration: 280, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', modals: true },
         push: { effect: 'default', duration: 300, easing: 'out' },
         modal: { effect: 'default', duration: 300, easing: 'out' },
         panel: { effect: 'default', duration: 260, easing: 'expo' },
