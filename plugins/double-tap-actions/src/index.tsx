@@ -2,7 +2,7 @@ import { AlertActionCreators, ToastActionCreators } from '@revenge-mod/discord/a
 import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
 import { getModuleWithImportedPath, lookupModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
-import { getModules, lookupModule } from '@revenge-mod/modules/finders'
+import { getModules, lookupModule, lookupModules } from '@revenge-mod/modules/finders'
 import { withDependencies, withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { Image, View } from 'react-native'
@@ -21,8 +21,18 @@ const PREVIEW_PATH = 'modules/messages/native/long_press/LongPressMessageChatIte
 let ChatItemPreview: any
 
 const PREVIEW_NAME = 'LongPressMessageChatItemPreview'
-// Discord 350.8 에서 이 모듈이 가져오는 모듈 번호들. 아직 안 불러왔으면 이걸로 찾아서 직접 불러온다
-const PREVIEW_DEPS_350 = [21, 5092, 587, 7742, 558, 576, 9369, 2]
+// 이 모듈이 가져오는 모듈 번호. 21·587·558·576·2 는 350.8 과 351.9 에서 같았고,
+// 나머지는 경로로 번호를 알아낸다 (모르면 아무거나 허용). 이름으로 한 번 더 확인한다
+const CREATE_STYLES_PATH = 'design/components/Styles/native/createStyles.tsx'
+const ROW_GENERATOR_PATH = 'modules/messages/native/renderer/RowGenerator.tsx'
+const CHAT_ITEM_PATH = 'components_native/chat/ChatItem.tsx'
+const idOf = (path: string) => {
+    try {
+        return (lookupModuleWithImportedPath(path) as any)[1] ?? null
+    } catch {
+        return null
+    }
+}
 
 function usePreviewExports(exports: any) {
     const C = exports?.default ?? exports
@@ -37,9 +47,14 @@ function loadPreview() {
         if (exports) return usePreviewExports(exports)
     } catch {}
     try {
-        const [exports] = lookupModule(withDependencies(PREVIEW_DEPS_350) as any) as any
-        const C = exports?.default
-        if (typeof C === 'function' && C.name === PREVIEW_NAME) ChatItemPreview = C
+        const deps = [21, idOf(CREATE_STYLES_PATH), 587, idOf(ROW_GENERATOR_PATH), 558, 576, idOf(CHAT_ITEM_PATH), 2]
+        for (const [exports] of lookupModules(withDependencies(deps) as any) as any) {
+            const C = exports?.default
+            if (typeof C === 'function' && C.name === PREVIEW_NAME) {
+                ChatItemPreview = C
+                break
+            }
+        }
     } catch {}
 }
 let seq = 0
