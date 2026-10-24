@@ -1,11 +1,14 @@
 import { AlertActionCreators, ToastActionCreators } from '@revenge-mod/discord/actions'
+import { Tokens } from '@revenge-mod/discord/common/tokens'
 import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
 import { getModuleWithImportedPath, lookupModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
 import { getModules, lookupModule, lookupModules } from '@revenge-mod/modules/finders'
 import { withDependencies, withProps } from '@revenge-mod/modules/finders/filters'
+import { callNativeMethod } from '@revenge-mod/modules/native'
 import { instead } from '@revenge-mod/patcher'
-import { Image, View } from 'react-native'
+import { useState } from 'react'
+import { Image, ScrollView, View } from 'react-native'
 
 /**
  * 내 메시지를 두 번 누르면 (기본: 반응 달기) 대신 가운데 작은 창으로 수정·삭제를 고르게 한다.
@@ -13,7 +16,26 @@ import { Image, View } from 'react-native'
  * 안드로이드 채팅 목록은 네이티브라 JS 에는 "어느 메시지를 두 번 눌렀는지"만 온다.
  * 채팅 화면마다 만들어지는 MessagesHandlers 인스턴스의 handleDoubleTapMessage 를 감싼다.
  * 창은 디스코드 AlertModal 이라 테마 색을 그대로 따라간다.
+ *
+ * 내 메시지를 왼쪽으로 세게 당기면 (디스코드: 바로 수정) 대신 그 메시지 밑에 수정·삭제 버튼을 띄울 수도 있다.
+ * 당기기는 handleEdit(message, channel, chatInputRef, 'message_swipe', true) 로 오고,
+ * 버튼은 네이티브(plugin.jar)가 손가락이 닿은 메시지 줄 밑에 띄운다.
  */
+
+const NATIVE_ID = 'yumistra.double-tap-actions'
+
+type Mode = 'buttons' | 'dialog' | 'default'
+interface Settings {
+    /** 세게 당기기: buttons = 밑에 버튼, default = 바로 수정 (디스코드 기본) */
+    swipe: 'buttons' | 'default'
+    /** 두 번 누르기: dialog = 가운데 창, buttons = 밑에 버튼, default = 반응 달기 (디스코드 기본) */
+    doubleTap: Mode
+    /** 밑에 버튼에서 삭제는 한 번 더 눌러야 */
+    confirmDelete: boolean
+}
+const DEFAULTS: Settings = { swipe: 'buttons', doubleTap: 'dialog', confirmDelete: true }
+let storage: any
+const settings = (): Settings => ({ ...DEFAULTS, ...(storage?.cache ?? {}) })
 
 const D = () => Design as any
 const PREVIEW_PATH = 'modules/messages/native/long_press/LongPressMessageChatItemPreview.tsx'
@@ -95,12 +117,19 @@ function previewOf(message: any) {
     return '(내용 없음)'
 }
 
-function edit(handlers: any, message: any, channel: any) {
+/** 우리가 부르는 handleEdit 는 가로채지 않는다 */
+let bypass = 0
+
+function edit(handlers: any, message: any, channel: any, chatInputRef = handlers?.params?.chatInputRef, source = 'double_tap', extra: any[] = []) {
     mods()
-    const chatInputRef = handlers?.params?.chatInputRef
     try {
         if (editUtils?.handleEdit && chatInputRef) {
-            editUtils.handleEdit(message, channel, chatInputRef, 'double_tap')
+            bypass++
+            try {
+                editUtils.handleEdit(message, channel, chatInputRef, source, ...extra)
+            } finally {
+                bypass--
+            }
             return
         }
     } catch {}
@@ -145,10 +174,10 @@ function FallbackPreview({ message, channel }: { message: any; channel: any }) {
     )
 }
 
-function openActions(handlers: any, message: any, channel: any) {
+function openActions(handlers: any, message: any, channel: any, chatInputRef?: any, source?: string, extra?: any[]) {
     loadPreview()
-    const { AlertModal, AlertActionButton, Text } = D()
-    const editable = MESSAGE_TYPES_EDITABLE.has(message.type ?? 0) && message.state !== 'SEND_FAILED' && message.state !== 'SENDING'
+    const { AlertModal, AlertActionButton } = D()
+    const editable = editableOf(message)
     AlertActionCreators.openAlert(
         `double-tap-actions-${seq++}`,
         <AlertModal
@@ -165,13 +194,75 @@ function openActions(handlers: any, message: any, channel: any) {
             }
             actions={
                 <>
-                    {editable && <AlertActionButton text="수정" variant="primary" onPress={() => edit(handlers, message, channel)} />}
+                    {editable && <AlertActionButton text="수정" variant="primary" onPress={() => edit(handlers, message, channel, chatInputRef ?? handlers?.params?.chatInputRef, source, extra)} />}
                     <AlertActionButton text="삭제" variant="destructive" onPress={() => remove(message, channel)} />
                     <AlertActionButton text="취소" variant="secondary" />
                 </>
             }
         />,
     )
+}
+
+const editableOf = (message: any) =>
+    MESSAGE_TYPES_EDITABLE.has(message?.type ?? 0) && message?.state !== 'SEND_FAILED' && message?.state !== 'SENDING'
+
+/** 테마 색 (#rrggbbaa → 안드로이드 #aarrggbb) */
+function themeColor(names: string[], fallback: string) {
+    try {
+        const tokens: any = Tokens
+        const theme = (Stores as any).ThemeStore?.theme ?? 'dark'
+        for (const name of names) {
+            const key = tokens.default.colors[name]
+            if (!key) continue
+            const c = tokens.default.internal.resolveSemanticColor(theme, key)
+            if (typeof c !== 'string') continue
+            const hex = c.trim()
+            if (/^#[0-9a-f]{6}$/i.test(hex)) return hex
+            if (/^#[0-9a-f]{8}$/i.test(hex)) return `#${hex.slice(7, 9)}${hex.slice(1, 7)}`
+            const m = hex.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/i)
+            if (m) {
+                const h = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0')
+                const a = m[4] === undefined ? 1 : m[4].endsWith('%') ? Number.parseFloat(m[4]) / 100 : Number(m[4])
+                return `#${h(a * 255)}${h(+m[1])}${h(+m[2])}${h(+m[3])}`
+            }
+        }
+    } catch {}
+    return fallback
+}
+
+/** 네이티브가 없거나 메시지 줄을 못 찾으면 null */
+async function showButtons(message: any): Promise<string | null> {
+    const buttons: any[] = []
+    if (editableOf(message))
+        buttons.push({
+            id: 'edit',
+            label: '수정',
+            bg: themeColor(['CONTROL_PRIMARY_BACKGROUND_DEFAULT', 'BRAND_500'], '#5865f2'),
+            fg: themeColor(['CONTROL_PRIMARY_TEXT_DEFAULT', 'WHITE'], '#ffffff'),
+        })
+    buttons.push({
+        id: 'delete',
+        label: '삭제',
+        confirm: settings().confirmDelete ? '정말 삭제?' : '',
+        bg: themeColor(['CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT'], '#da373c'),
+        fg: themeColor(['CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT', 'WHITE'], '#ffffff'),
+    })
+    const opts = { buttons, bg: themeColor(['BACKGROUND_SURFACE_HIGHEST', 'BACKGROUND_SURFACE_HIGH'], '#2b2d31'), inset: 68 }
+    try {
+        const r = await Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.showActions`, [JSON.stringify(opts)]))
+        if (r === 'norow' || typeof r !== 'string') return null
+        return r
+    } catch {
+        return null
+    }
+}
+
+/** 밑에 버튼으로 고르게 한다. 못 띄우면 가운데 창으로 */
+async function inlineActions(handlers: any, message: any, channel: any, chatInputRef?: any, source?: string, extra?: any[]) {
+    const choice = await showButtons(message)
+    if (choice === null) return openActions(handlers, message, channel, chatInputRef, source, extra)
+    if (choice === 'edit') edit(handlers, message, channel, chatInputRef, source, extra)
+    else if (choice === 'delete') remove(message, channel)
 }
 
 /** MessagesHandlers 인스턴스의 두 번 누르기 처리를 감싼다 */
@@ -183,8 +274,10 @@ function wrapInstance(inst: any) {
             mods()
             const data = snowflakeUtils?.getNativeSyntheticEventData?.(event) ?? event?.nativeEvent ?? event
             const result = data?.messageId ? inst.getMessageData?.(data.messageId) : undefined
-            if (result?.message && result.messageChannel && isMine(result.message)) {
-                openActions(inst, result.message, result.messageChannel)
+            const mode = settings().doubleTap
+            if (mode !== 'default' && result?.message && result.messageChannel && isMine(result.message)) {
+                if (mode === 'buttons') inlineActions(inst, result.message, result.messageChannel)
+                else openActions(inst, result.message, result.messageChannel)
                 return
             }
         } catch {}
@@ -194,8 +287,71 @@ function wrapInstance(inst: any) {
     inst.handleDoubleTapMessage = wrapped
 }
 
+function Choice<T extends string>({ title, value, options, onChange }: { title: string; value: T; options: [T, string, string?][]; onChange: (v: T) => void }) {
+    const { TableRadioGroup, TableRadioRow } = D()
+    return (
+        <TableRadioGroup title={title} value={value} onChange={onChange}>
+            {options.map(([v, label, sub]) => (
+                <TableRadioRow key={v} value={v} label={label} subLabel={sub} />
+            ))}
+        </TableRadioGroup>
+    )
+}
+
+function SettingsPage({ api }: { api: any }) {
+    const { Stack, TableRowGroup, TableSwitchRow, Text } = D()
+    storage ??= api?.jsonStorage
+    const [s, setS] = useState<Settings>(settings)
+    const save = async (patch: Partial<Settings>) => {
+        const next = { ...s, ...patch }
+        setS(next)
+        try {
+            await storage?.get?.()
+        } catch {}
+        storage?.set({ ...(storage?.cache ?? {}), ...next }, true)
+    }
+    return (
+        <ScrollView style={{ flex: 1 }}>
+            <Stack spacing={16} style={{ padding: 16 }}>
+                <Choice
+                    title="내 메시지를 왼쪽으로 세게 당기면"
+                    value={s.swipe}
+                    onChange={swipe => save({ swipe })}
+                    options={[
+                        ['buttons', '메시지 밑에 수정·삭제 버튼', '약하게 당기면 그대로 답장'],
+                        ['default', '바로 수정 (디스코드 기본)'],
+                    ]}
+                />
+                <Choice
+                    title="내 메시지를 두 번 누르면"
+                    value={s.doubleTap}
+                    onChange={doubleTap => save({ doubleTap })}
+                    options={[
+                        ['dialog', '가운데 창으로 수정·삭제'],
+                        ['buttons', '메시지 밑에 수정·삭제 버튼'],
+                        ['default', '반응 달기 (디스코드 기본)'],
+                    ]}
+                />
+                <TableRowGroup>
+                    <TableSwitchRow
+                        label="삭제는 한 번 더 눌러 확인"
+                        subLabel="밑에 버튼에서 삭제를 누르면 '정말 삭제?'로 바뀌고, 한 번 더 눌러야 지워져요"
+                        value={s.confirmDelete}
+                        onValueChange={(confirmDelete: boolean) => save({ confirmDelete })}
+                    />
+                </TableRowGroup>
+                <Text variant="text-xs/normal" color="text-muted">
+                    버튼 밖을 누르면 닫혀요. 밑에 버튼은 네이티브 부분이 있어야 해서, 처음 켠 뒤에는 디스코드를 다시 시작해야 나와요. 그 전에는 가운데 창이 대신 떠요.
+                </Text>
+            </Stack>
+        </ScrollView>
+    )
+}
+
 export default plugin({
-    start({ cleanup }: any) {
+    jsonStorage: { load: true, default: DEFAULTS },
+    start({ cleanup, jsonStorage }: any) {
+        storage = jsonStorage
         cleanup(
             getModuleWithImportedPath(PREVIEW_PATH, (exports: any) => usePreviewExports(exports)) as any,
         )
@@ -207,8 +363,29 @@ export default plugin({
                     instead(mod, 'handleAddDefaultDoubleTapReaction', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
                         try {
                             const [message, channel] = args
-                            if (message && channel && isMine(message)) {
-                                openActions(undefined, message, channel)
+                            const mode = settings().doubleTap
+                            if (mode !== 'default' && message && channel && isMine(message)) {
+                                if (mode === 'buttons') inlineActions(undefined, message, channel)
+                                else openActions(undefined, message, channel)
+                                return
+                            }
+                        } catch {}
+                        return orig.apply(this, args)
+                    }),
+                )
+            }) as any,
+        )
+        // 세게 당겨 수정하기 → 밑에 버튼
+        cleanup(
+            getModules(withProps('handleEdit', 'longPressMessageOptionHandler') as any, (mod: any) => {
+                if (typeof mod?.handleEdit !== 'function') return
+                editUtils ??= mod
+                cleanup(
+                    instead(mod, 'handleEdit', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        try {
+                            const [message, channel, chatInputRef, source] = args
+                            if (!bypass && source === 'message_swipe' && settings().swipe === 'buttons' && message && channel && isMine(message)) {
+                                inlineActions(undefined, message, channel, chatInputRef, source, args.slice(4))
                                 return
                             }
                         } catch {}
@@ -241,4 +418,5 @@ export default plugin({
             }) as any,
         )
     },
+    SettingsComponent: SettingsPage,
 } as any)
