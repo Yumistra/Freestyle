@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Easing, View } from 'react-native'
-import { applyMove, DEFAULT_PREVIEW, easingFrom, effectOf, exitEffectOf, springFor, type EasingKey, type ModuleKey, type Normalized } from '../effects'
+import { applyMove, caskStyleOf, DEFAULT_PREVIEW, easingFrom, effectOf, exitEffectOf, springFor, type EasingKey, type ModuleKey, type Normalized } from '../effects'
 import { makeCardInterpolator, partsFor } from '../interpolate'
+import { caskRun, caskVisual, randomColor } from '../patches/lists'
 import type { ModuleSettings } from '../settings'
 import { palette } from './colors'
 
@@ -151,6 +152,48 @@ function MessagesPreview({ s, W }: { s: ModuleSettings; W: number }) {
     )
 }
 
+/** 목록 스크롤 (Cask): 줄들이 차례로 들어온다 */
+function CaskPreview({ s, W }: { s: ModuleSettings; W: number }) {
+    const c = useMemo(palette, [])
+    const style = caskStyleOf(s.effect)
+    const ROWS = 5
+    const values = useRef([...Array(ROWS)].map(() => new Animated.Value(1))).current
+    const colors = useMemo(() => values.map(() => randomColor()), [s.effect])
+    useEffect(() => {
+        if (!style) return
+        let stopped = false
+        let current: any
+        const cycle = () => {
+            if (stopped) return
+            for (const v of values) v.setValue(0)
+            current = Animated.sequence([
+                Animated.stagger(Math.max(60, s.duration * 0.25), values.map(v => (style === 'permanentColor' ? Animated.timing(v, { toValue: 1, duration: s.duration, useNativeDriver: true }) : caskRun(style, v, s.duration)))),
+                Animated.delay(1100),
+            ])
+            current.start(({ finished }: any) => finished && cycle())
+        }
+        cycle()
+        return () => {
+            stopped = true
+            current?.stop()
+        }
+    }, [s.effect, s.duration])
+    return (
+        <View style={{ ...fill, padding: 12, gap: 8 }}>
+            {values.map((v, i) => {
+                const vis = style ? caskVisual(style, v, W) : {}
+                return (
+                    <Animated.View key={i} style={[{ height: 22, borderRadius: 8, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 8, overflow: 'hidden' }, vis.style]}>
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.brand }} />
+                        <View style={{ height: 6, width: `${40 + ((i * 23) % 45)}%` as any, borderRadius: 3, backgroundColor: c.text }} />
+                        {vis.overlay && <Animated.View style={[fill, { backgroundColor: colors[i], opacity: vis.overlay }]} />}
+                    </Animated.View>
+                )
+            })}
+        </View>
+    )
+}
+
 /** 채널 목록 접기·펼치기 / 서버 바꾸기 (LayoutAnimation 흉내, 높이는 JS 로) */
 function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: ModuleSettings }) {
     const c = useMemo(palette, [])
@@ -221,7 +264,9 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
     const isScreen = module === 'stack' || module === 'push' || module === 'modal' || module === 'panel'
     const hFor = (w: number, h: number, extra?: Parameters<typeof adjust>[1]) => [adjust(applyMove(effect.hidden, move, w, h), extra), adjust(applyMove(exit.hidden, move, w, h), extra)] as const
 
-    if (module === 'messages') {
+    if (module === 'lists' || (module === 'messages' && caskStyleOf(settings.effect))) {
+        body = <CaskPreview s={settings} W={W} />
+    } else if (module === 'messages') {
         body = <MessagesPreview s={settings} W={W} />
     } else if (module === 'channelList' || module === 'servers') {
         body = <ListPreview module={module} s={shown} />

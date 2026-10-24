@@ -17,6 +17,8 @@ export interface ModuleSettings {
     shift?: boolean
     /** 메시지: 밀리는 시간 (ms) */
     shiftDuration?: number
+    /** 목록 스크롤: 스크롤할 때뿐 아니라 목록이 처음 나타날 때도 */
+    always?: boolean
     /** 화면 전환: 설정 같은 모달 화면에도 */
     modals?: boolean
     /** 배경: 진하기 (0~1, 디스코드 기본 대비) */
@@ -30,6 +32,7 @@ export interface Settings {
 
 export const MODULE_KEYS: ModuleKey[] = [
     'messages',
+    'lists',
     'stack',
     'push',
     'modal',
@@ -50,6 +53,7 @@ export const DEFAULTS: Settings = {
     enabled: true,
     modules: {
         messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200 },
+        lists: { effect: 'default', duration: 500, easing: 'out', always: false },
         stack: { effect: 'slip', duration: 280, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', modals: true },
         push: { effect: 'default', duration: 300, easing: 'out' },
         modal: { effect: 'default', duration: 300, easing: 'out' },
@@ -169,6 +173,7 @@ export const status = {
     notices: 0,
     folders: 0,
     layouts: 0,
+    listCells: 0,
     /** 네이티브(메시지) 부분: null = 아직 확인 전 */
     native: null as null | boolean,
     /** 네이티브가 큰 화면 전환을 맡는지 */
