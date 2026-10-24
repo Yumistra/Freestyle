@@ -42,6 +42,7 @@ export const MODULE_KEYS: ModuleKey[] = [
     'alert',
     'backdrop',
     'toast',
+    'notice',
     'subtle',
 ]
 
@@ -61,6 +62,7 @@ export const DEFAULTS: Settings = {
         alert: { effect: 'zoom', duration: 380, easing: 'spring', exit: 'same', direction: 'auto', position: 'auto' },
         backdrop: { effect: 'default', duration: 300, easing: 'out', amount: 0.6 },
         toast: { effect: 'slide', duration: 380, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },
+        notice: { effect: 'default', duration: 300, easing: 'out', direction: 'auto', position: 'auto' },
         subtle: { effect: 'default', duration: 260, easing: 'spring' },
     },
 }
@@ -120,6 +122,7 @@ export const status = {
     alerts: 0,
     backdrops: 0,
     toasts: 0,
+    notices: 0,
     folders: 0,
     layouts: 0,
     /** 네이티브(메시지) 부분: null = 아직 확인 전 */

@@ -20,6 +20,7 @@ export type ModuleKey =
     | 'alert'
     | 'backdrop'
     | 'toast'
+    | 'notice'
     | 'subtle'
 
 export interface Hidden {
@@ -179,6 +180,21 @@ export const TOAST_EFFECTS: Effect[] = [
     { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.1, r: 8 } },
 ]
 
+// ── 알림 배너 (다른 채널 메시지가 오면 화면 위에 뜨는 알림) ──────────────────
+export const NOTICE_EFFECTS: Effect[] = [
+    { id: 'default', label: '기본' },
+    { id: 'slide', label: '밀려오기', hidden: { o: 0, edge: true } },
+    { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, ty: 30, s: 0.9 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 20 } },
+    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
+    { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.6 } },
+    { id: 'fade', label: '페이드', hidden: { o: 0 } },
+    { id: 'side', label: '옆에서', hidden: { o: 0, txW: -1 } },
+    { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
+    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.1, r: 8 } },
+]
+
 // ── 채널 화면 밀기 (채널 목록 ↔ 채팅) ──────────────────────────────
 export const PANEL_EFFECTS: Effect[] = [
     { id: 'default', label: '기본' },
@@ -242,6 +258,7 @@ export const EFFECTS: Record<ModuleKey, Effect[]> = {
     alert: ALERT_EFFECTS,
     backdrop: BACKDROP_EFFECTS,
     toast: TOAST_EFFECTS,
+    notice: NOTICE_EFFECTS,
 }
 
 export const effectOf = (module: ModuleKey, id: string): Effect => EFFECTS[module].find(e => e.id === id) ?? EFFECTS[module][0]
@@ -268,6 +285,7 @@ export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: numb
     alert: { effect: 'zoom', duration: 400, easing: 'spring' },
     backdrop: { effect: 'solid', duration: 300, easing: 'out' },
     toast: { effect: 'slide', duration: 250, easing: 'linear' },
+    notice: { effect: 'zoom', duration: 300, easing: 'out' },
     panel: { effect: 'custom', duration: 250, easing: 'out' },
     channelList: { effect: 'none', duration: 0, easing: 'linear' },
     servers: { effect: 'none', duration: 0, easing: 'linear' },

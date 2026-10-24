@@ -25,18 +25,25 @@ const one = new Animated.Value(1)
 const FULL_MODALS = new Set(['modal', 'fullScreenModal', 'containedModal', 'pageSheet'])
 
 /** "화면 전환" 효과를 이 화면에 쓸지 */
-function stackFor(presentation: string | undefined) {
+/**
+ * 디스코드 예전 방식 모달(Navigation.push → 루트의 'modal' 경로)은 반투명 모달로 뜨지만
+ * 실제로는 꽉 찬 화면이다 (플러그인 화면들이 주로 이걸 쓴다). 화면 키가 'modal-' 로 시작한다
+ */
+const isLegacyModal = (presentation: string | undefined, screenId: unknown) =>
+    presentation === 'transparentModal' && typeof screenId === 'string' && screenId.startsWith('modal-')
+
+function stackFor(presentation: string | undefined, screenId?: unknown) {
     const m = active('stack')
     if (!m) return
     const pres = presentation ?? 'push'
     if (pres === 'push') return m
-    if (FULL_MODALS.has(pres) && m.modals !== false) return m
+    if ((FULL_MODALS.has(pres) || isLegacyModal(pres, screenId)) && m.modals !== false) return m
 }
 
-function Enter({ children, presentation }: { children?: any; presentation?: string }) {
+function Enter({ children, presentation, screenId }: { children?: any; presentation?: string; screenId?: unknown }) {
     const index = useContext(IndexContext)
     const [anim] = useState(() => {
-        const m = stackFor(presentation)
+        const m = stackFor(presentation, screenId)
         const pres = presentation ?? 'push'
         // 스택의 첫 화면은 그대로. 순서를 모르면(-1) 모달만 (모달은 첫 화면일 수 없다)
         const first = index === 0 || (index < 0 && pres === 'push')
@@ -66,7 +73,7 @@ function Enter({ children, presentation }: { children?: any; presentation?: stri
 function nativeAnimationFor(props: any) {
     const presentation = props.stackPresentation ?? 'push'
     if (presentation !== 'push') {
-        const stack = stackFor(presentation)
+        const stack = stackFor(presentation, props.screenId)
         // 모달에 직접 만든 효과를 쓰면 네이티브는 페이드만 (효과는 Enter 가)
         if (stack) return stack.effect === 'none' ? 'none' : (active('modal')?.effect ?? 'fade')
         return active('modal')?.effect
@@ -121,7 +128,7 @@ export function patchNativeScreens(cleanup: (...fns: Array<() => unknown>) => vo
                     try {
                         const props = args[1]
                         if (!props || props.children === undefined) return args as any
-                        const next: any = { ...props, children: createElement(Enter, { presentation: props.stackPresentation }, props.children) }
+                        const next: any = { ...props, children: createElement(Enter, { presentation: props.stackPresentation, screenId: props.screenId }, props.children) }
                         // 네이티브 전환도 여기서 바꾼다 (RNSScreen 요소까지 안 내려오는 경우가 있어서)
                         if (props.stackAnimation !== 'none') {
                             const anim = nativeAnimationFor(props)

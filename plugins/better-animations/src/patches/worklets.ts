@@ -136,11 +136,24 @@ const FOLDER =
     "if(h.rx){t.push({rotateX:go(on?'0deg':h.rx+'deg')});}" +
     'return{opacity:T(on?1:h.o,BA.fade,function(finished){if(finished&&c.state===c.TransitionStates.YEETED){c.runOnJS(c.cleanUp)();}}),transform:t};}'
 
-export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER }
+// 알림 배너: 처음 나타날 땐(initialized 전) scale 값이 0 → 1 로 움직이고, 그 뒤엔 손가락으로 끌어 닫는다.
+// 나타나는 동안만 그 진행도로 우리 효과를 그리고, 끄는 동작은 디스코드 그대로 둔다
+const NOTICE =
+    'function BetterAnimationsInAppNotification(){var c=this.__closure;' +
+    HELPERS +
+    'var gy=c.notificationGestureY.get();' +
+    'if(c.initialized){return{transform:[{translateY:gy},{scale:c.interpolate(gy,c.PAN_INPUT_RANGE,[0.3,1,0.3],c.extrapolateConfig)}],opacity:c.interpolate(gy,c.PAN_INPUT_RANGE,[0,1,0],c.extrapolateConfig)};}' +
+    'var k=c.scale.get();var q=1-k;var h=H0;' +
+    'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:gy+((h.edge?-140:0)-h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k}];' +
+    "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
+    "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
+    'return{transform:t,opacity:Math.min(1,h.o+(1-h.o)*Math.min(1,k*1.4))};}'
+
+export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE }
 
 // ── 디스코드 워클릿 알아보기 ─────────────────────────────────────
 
-type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder'
+type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder' | 'notice'
 
 const has = (c: object, ...keys: string[]) => keys.every(k => k in c)
 
@@ -155,11 +168,12 @@ export function kindOf(closure: any): Kind | undefined {
     if (has(closure, 'CONTEXT_MENU_MIN_SCALE', 'positionX', 'positionY', 'visible', 'cleanUp')) return 'menu'
     if (has(closure, 'CONTEXT_MENU_SPRING', 'visible') && Object.keys(closure).length <= 4) return 'menuBackdrop'
     if (has(closure, 'FOLDER_SPRING_PHYSICS', 'fromTop', 'guildItemSize', 'visible', 'cleanUp')) return 'folder'
+    if (has(closure, 'notificationGestureY', 'scale', 'initialized', 'PAN_INPUT_RANGE', 'extrapolateConfig', 'interpolate')) return 'notice'
 }
 
-const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder' }
-const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER }
-const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders' }
+const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder', notice: 'notice' }
+const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER, notice: NOTICE }
+const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders', notice: 'notices' }
 
 // ── 설정 → 워클릿에 넘길 값 ─────────────────────────────────────
 
@@ -172,6 +186,8 @@ function sizeOf(module: ModuleKey, W: number, H: number): [number, number] {
             return [Math.min(W - 32, 400), Math.min(H * 0.4, 320)]
         case 'toast':
             return [Math.min(W - 32, 360), 48]
+        case 'notice':
+            return [W - 16, 80]
         case 'menu':
             return [220, 240]
         case 'folder':

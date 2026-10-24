@@ -106,6 +106,11 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         description: '확인창·팝업 메뉴 뒤를 어둡게 덮는 막. 진하기를 바꾸거나 없앨 수 있어요',
         easings: ['out', 'smooth', 'linear', 'expo'],
     },
+    notice: {
+        title: '알림 배너',
+        description: '다른 채널에 메시지가 오면 화면 위에 뜨는 알림이 나타나는 모습 (속도는 디스코드 것을 따라요)',
+        move: true,
+    },
     toast: {
         title: '토스트',
         description: '화면 위에 잠깐 뜨는 작은 알림',
@@ -426,6 +431,7 @@ function StatusRows() {
         ['확인창', `${status.alerts}회`],
         ['배경', `${status.backdrops}회`],
         ['토스트', `${status.toasts}회`],
+        ['알림 배너', `${status.notices}회`],
         ['서버 폴더', `${status.folders}회`],
         ['채널 목록·서버 바꾸기', `액션 ${f.layout ? '연결됨' : '못 찾음'} · 채널 줄 ${f.channelRows ? '연결됨' : '못 찾음'} · 서버 목록 ${f.servers ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
         ['디스코드 상수', status.constants.length ? status.constants.join(', ') : '아직 못 찾음'],
