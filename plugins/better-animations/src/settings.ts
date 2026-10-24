@@ -76,6 +76,27 @@ export const hasStorage = () => !!storage
 export function bindStorage(s: any) {
     storage = s
     version++
+    // 저장된 설정은 플러그인이 시작된 뒤에 늦게 불러와진다. 다 불러오면 캐시를 버리고 다시 적용한다
+    if (!s?.cache && typeof s?.get === 'function') {
+        Promise.resolve(s.get())
+            .then(() => {
+                if (storage !== s) return
+                version++
+                notify()
+            })
+            .catch((e: unknown) => report('storage', e))
+    }
+}
+
+/** 저장 파일 내용 (아직 안 불러왔으면 불러와서). 덮어쓰기 전에 꼭 이걸로 읽는다 */
+async function current(): Promise<Record<string, any>> {
+    if (!storage) return {}
+    if (storage.cache) return storage.cache
+    try {
+        return (await storage.get()) ?? {}
+    } catch {
+        return {}
+    }
 }
 
 export function settings(): Settings {
@@ -96,9 +117,15 @@ export function active(key: ModuleKey): ModuleSettings | undefined {
 /** 설정 말고 같은 파일에 같이 두는 값 (네이티브용으로 풀어 둔 효과 등) */
 export const storedExtra = (key: string) => storage?.cache?.[key]
 
+/** 저장된 설정을 다 불러올 때까지 기다린다 */
+export async function ready() {
+    await current()
+}
+
 export async function setExtra(key: string, value: unknown) {
     if (!storage) return
-    await storage.set({ ...(storage.cache ?? {}), [key]: value }, true)
+    const cur = await current()
+    await storage.set({ ...cur, [key]: value }, true)
 }
 
 const listeners = new Set<() => void>()
@@ -111,10 +138,14 @@ export function onSettingsChange(fn: () => void) {
 export async function save(next: Settings) {
     version++
     // 같이 두는 값(native 등)은 지우지 않는다
-    const extra = { ...(storage?.cache ?? {}) }
+    const extra = { ...(await current()) }
     delete extra.enabled
     delete extra.modules
     await storage?.set({ ...extra, ...next }, true)
+    notify()
+}
+
+function notify() {
     for (const fn of listeners) {
         try {
             fn()

@@ -1,6 +1,6 @@
 import { callNativeMethod } from '@revenge-mod/modules/native'
 import { applyMove, effectOf, exitEffectOf, normalize } from './effects'
-import { active, report, setExtra, status, storedExtra } from './settings'
+import { active, ready, report, setExtra, status, storedExtra } from './settings'
 
 /**
  * 네이티브(plugin.jar) 부분: 채팅 메시지 애니메이션, 큰 화면 전환.
@@ -38,6 +38,8 @@ export function nativeStackConfig() {
 /** 풀어 둔 값을 저장하고 네이티브에 다시 읽으라고 알린다 */
 export async function syncNative() {
     try {
+        // 저장된 설정을 다 불러온 다음에 풀어야 기본값으로 덮어쓰지 않는다
+        await ready()
         const stack = nativeStackConfig()
         if (JSON.stringify(storedExtra('native')?.stack) !== JSON.stringify(stack)) await setExtra('native', { stack })
     } catch (e) {
