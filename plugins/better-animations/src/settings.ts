@@ -17,6 +17,8 @@ export interface ModuleSettings {
     shift?: boolean
     /** 메시지: 밀리는 시간 (ms) */
     shiftDuration?: number
+    /** 화면 전환: 설정 같은 모달 화면에도 */
+    modals?: boolean
     /** 배경: 진하기 (0~1, 디스코드 기본 대비) */
     amount?: number
 }
@@ -47,7 +49,7 @@ export const DEFAULTS: Settings = {
     enabled: true,
     modules: {
         messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200 },
-        stack: { effect: 'slip', duration: 380, easing: 'expo', exit: 'same', direction: 'auto', position: 'auto' },
+        stack: { effect: 'slip', duration: 380, easing: 'expo', exit: 'same', direction: 'auto', position: 'auto', modals: true },
         push: { effect: 'default', duration: 300, easing: 'out' },
         modal: { effect: 'default', duration: 300, easing: 'out' },
         panel: { effect: 'default', duration: 260, easing: 'expo' },
@@ -111,6 +113,7 @@ export async function save(next: Settings) {
 /** 작동 확인용 숫자 */
 export const status = {
     screens: 0,
+    nativeScreens: 0,
     stack: 0,
     sheets: 0,
     menus: 0,

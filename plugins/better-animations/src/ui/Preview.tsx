@@ -155,9 +155,7 @@ function MessagesPreview({ s, W }: { s: ModuleSettings; W: number }) {
 function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: ModuleSettings }) {
     const c = useMemo(palette, [])
     const instant = s.effect === 'default' || s.effect === 'none'
-    const scale = s.effect === 'scale'
     const { p } = useLoop(s.duration, s.easing, instant, false)
-    const fade = (v: any) => ({ opacity: v, transform: scale ? [{ scale: lerp(v, 0.6, 1) }] : [] })
     if (module === 'servers') {
         const a = p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
         const h = applyMove(effectOf('servers', instant ? 'fade' : s.effect).hidden, { direction: s.direction, position: s.position }, 220, HEIGHT)
@@ -180,6 +178,8 @@ function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: Modu
         )
     }
     const ROW = 19
+    const rh = applyMove(effectOf('channelList', instant ? 'smooth' : s.effect).hidden, undefined, 200, 20)
+    const rowStyle = moving(p, undefined, rh, rh, 200, 20)
     return (
         <View style={{ ...fill, padding: 14, gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -187,7 +187,7 @@ function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: Modu
                 <View style={{ height: 8, width: 90, borderRadius: 4, backgroundColor: c.muted }} />
             </View>
             <Animated.View style={{ height: lerp(p, 0, ROW * 3), overflow: 'hidden' }}>
-                <Animated.View style={[{ gap: 12, paddingLeft: 18 }, fade(p)]}>
+                <Animated.View style={[{ gap: 12, paddingLeft: 18 }, rowStyle]}>
                     <Bars color={c.text} widths={['60%', '45%', '70%']} gap={12} />
                 </Animated.View>
             </Animated.View>

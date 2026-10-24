@@ -21,11 +21,26 @@ const IndexContext = createContext(-1)
 
 const one = new Animated.Value(1)
 
+/** 꽉 찬 모달 (설정 화면 등). 투명 모달·폼 시트는 창/시트라 빼 둔다 */
+const FULL_MODALS = new Set(['modal', 'fullScreenModal', 'containedModal', 'pageSheet'])
+
+/** "화면 전환" 효과를 이 화면에 쓸지 */
+function stackFor(presentation: string | undefined) {
+    const m = active('stack')
+    if (!m) return
+    const pres = presentation ?? 'push'
+    if (pres === 'push') return m
+    if (FULL_MODALS.has(pres) && m.modals !== false) return m
+}
+
 function Enter({ children, presentation }: { children?: any; presentation?: string }) {
     const index = useContext(IndexContext)
     const [anim] = useState(() => {
-        const m = active('stack')
-        if (!m || m.effect === 'none' || index < 1 || (presentation ?? 'push') !== 'push') return undefined
+        const m = stackFor(presentation)
+        const pres = presentation ?? 'push'
+        // 스택의 첫 화면은 그대로. 순서를 모르면(-1) 모달만 (모달은 첫 화면일 수 없다)
+        const first = index === 0 || (index < 0 && pres === 'push')
+        if (!m || m.effect === 'none' || first) return undefined
         const { width, height } = Dimensions.get('window')
         const p = new Animated.Value(0)
         const style = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({ current: { progress: p }, inverted: one, layouts: { screen: { width, height } } }).cardStyle
@@ -48,7 +63,12 @@ function Enter({ children, presentation }: { children?: any; presentation?: stri
 /** 네이티브 전환 종류 */
 function nativeAnimationFor(props: any) {
     const presentation = props.stackPresentation ?? 'push'
-    if (presentation !== 'push') return active('modal')?.effect
+    if (presentation !== 'push') {
+        const stack = stackFor(presentation)
+        // 모달에 직접 만든 효과를 쓰면 네이티브는 페이드만 (효과는 Enter 가)
+        if (stack) return stack.effect === 'none' ? 'none' : (active('modal')?.effect ?? 'fade')
+        return active('modal')?.effect
+    }
     const push = active('push')?.effect
     const stack = active('stack')
     // 직접 만든 효과가 들어올 때 함께 쓸 네이티브 전환. 따로 고르지 않았으면 페이드
@@ -69,6 +89,7 @@ export function patchNativeScreens(cleanup: (...fns: Array<() => unknown>) => vo
                 if (!props || props.stackAnimation === 'none') return args as any
                 const next = nativeAnimationFor(props)
                 if (!next || next === props.stackAnimation) return args as any
+                status.nativeScreens++
                 return [args[0], { ...props, stackAnimation: next }, ...args.slice(2)] as any
             } catch (e) {
                 report('screens', e)

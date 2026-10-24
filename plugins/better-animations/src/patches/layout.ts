@@ -7,6 +7,7 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import { Animated, Dimensions, Easing, LayoutAnimation } from 'react-native'
 import { applyMove, decodeEasing, easingFrom, effectOf, isCustomEasing, springFor, zetaOf } from '../effects'
 import { partsFor } from '../interpolate'
+import { hideCollapsing, markExpanded } from './channels'
 import { active, report, status, type ModuleSettings } from '../settings'
 
 /**
@@ -111,9 +112,11 @@ function animFor(easing: string): any {
     return { type: 'easeOut' }
 }
 
-export function layoutConfigFor(m: ModuleSettings) {
+export function layoutConfigFor(m: ModuleSettings, rowsHandled = false) {
     const anim = animFor(m.easing)
     const property = m.effect === 'scale' ? 'scaleXY' : 'opacity'
+    // 줄이 나타나고 사라지는 건 ChannelRow 가 하므로, 여기선 남은 줄이 밀리는 것만
+    if (rowsHandled) return { duration: m.duration, update: anim }
     return {
         duration: m.duration,
         create: { ...anim, property },
@@ -130,7 +133,8 @@ function onAction(action: any) {
     if (COLLAPSE.has(type)) {
         const m = active('channelList')
         if (!m) return
-        LayoutAnimation.configureNext(layoutConfigFor(m) as any)
+        if (type === 'CATEGORY_EXPAND' || type === 'CATEGORY_EXPAND_ALL') markExpanded(type === 'CATEGORY_EXPAND' ? categoryIdOf(action) : undefined)
+        LayoutAnimation.configureNext(layoutConfigFor(m, true) as any)
         status.layouts++
     } else if (!wrapped && (type === 'CHANNEL_SELECT' || type === 'GUILD_SELECT')) {
         const guild = action.guildId ?? null
@@ -144,11 +148,44 @@ function onAction(action: any) {
     }
 }
 
+function categoryIdOf(action: any): string | undefined {
+    const id = action?.id ?? action?.categoryId ?? action?.channelId
+    return id == null ? undefined : String(id)
+}
+
+/** 접기: 줄들이 먼저 사라지게 하고 그동안 실제 액션을 미룬다. 미룰 시간(ms) */
+function collapseDelay(action: any) {
+    const type = action?.type
+    if (action?.__betterAnimations || (type !== 'CATEGORY_COLLAPSE' && type !== 'CATEGORY_COLLAPSE_ALL')) return 0
+    const m = active('channelList')
+    if (!m) return 0
+    return hideCollapsing(type === 'CATEGORY_COLLAPSE' ? categoryIdOf(action) : undefined, m)
+}
+
 export function patchLayout() {
     const D: any = Dispatcher
     if (typeof D?.dispatch !== 'function') throw new Error('Dispatcher를 찾지 못함')
     status.found.layout = true
     return instead(D, 'dispatch', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+        let wait = 0
+        try {
+            wait = collapseDelay(args[0])
+        } catch (e) {
+            report('layout', e)
+        }
+        if (wait > 0) {
+            const self = this
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    try {
+                        onAction(args[0])
+                    } catch (e) {
+                        report('layout', e)
+                    }
+                    resolve(orig.apply(self, args))
+                }, wait)
+            })
+        }
         try {
             onAction(args[0])
         } catch (e) {

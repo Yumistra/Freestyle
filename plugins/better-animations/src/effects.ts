@@ -188,8 +188,11 @@ export const PANEL_EFFECTS: Effect[] = [
 // ── 채널 목록 (카테고리 접기·펼치기) ─────────────────────────────────
 export const CHANNEL_LIST_EFFECTS: Effect[] = [
     { id: 'default', label: '기본 (바로)' },
-    { id: 'smooth', label: '부드럽게', hidden: { o: 0 } },
-    { id: 'scale', label: '부드럽게 + 확대', hidden: { o: 0, s: 0.6 } },
+    { id: 'smooth', label: '페이드', hidden: { o: 0 } },
+    { id: 'slip', label: '슬립', hidden: { o: 0, tx: -24 } },
+    { id: 'drop', label: '떨어지기', hidden: { o: 0, ty: -14 } },
+    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.6 } },
+    { id: 'flip', label: '플립', hidden: { o: 0, rx: 70 } },
 ]
 
 // ── 서버 바꾸기 (서버를 누르면 채널 목록이 바뀔 때) ────────────────────────

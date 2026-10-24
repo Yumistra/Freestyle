@@ -55,13 +55,13 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         exit: true,
         move: true,
     },
-    stack: { title: '화면 전환', description: '설정 항목, 프로필, 검색처럼 안쪽으로 들어가는 화면이 나타나고 닫히는 효과', exit: true, move: true },
+    stack: { title: '화면 전환', description: '설정, 설정 항목, 프로필, 검색처럼 새로 열리는 화면이 나타나고 닫히는 효과', exit: true, move: true },
     push: {
         title: '화면 전환 · 안드로이드 효과',
         description: '화면을 나갈 때와 위 효과 아래에 같이 깔리는 안드로이드 기본 전환. 위 "화면 전환"을 고르면 여기 기본은 페이드가 돼요',
         native: true,
     },
-    modal: { title: '모달 화면', description: '아래에서 올라오는 전체 화면 (사용자 설정 등) · 안드로이드 기본 전환 중에서만 고를 수 있어요', native: true },
+    modal: { title: '모달 화면 · 안드로이드 효과', description: '아래에서 올라오는 전체 화면(설정 등)의 안드로이드 기본 전환. 위 "화면 전환"의 "모달 화면에도"가 켜져 있으면 닫힐 때와 함께 깔리는 효과로만 쓰여요', native: true },
     panel: {
         title: '채널 화면 밀기',
         description: '채널 목록 ↔ 채팅 화면, 멤버 목록이 옆으로 밀려 나오고 들어가는 움직임',
@@ -69,8 +69,7 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
     },
     channelList: {
         title: '채널 목록',
-        description: '카테고리를 접고 펼칠 때 채널들이 부드럽게 접히고 펼쳐지게',
-        easings: LAYOUT_EASINGS,
+        description: '카테고리를 접고 펼칠 때 채널들이 차례로 나타나고 사라지게',
     },
     servers: {
         title: '서버 바꾸기',
@@ -358,6 +357,9 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                             <Chips items={POSITIONS} value={value.position ?? 'auto'} onChange={position => set({ position })} />
                         </Field>
                     )}
+                    {id === 'stack' && custom && (
+                        <SwitchRow label="모달 화면에도" subLabel="설정처럼 아래에서 올라오는 화면에도 이 효과를 써요" value={value.modals !== false} onChange={modals => set({ modals })} />
+                    )}
                     {id === 'messages' && custom && (
                         <SliderField
                             label="차례로 나타나는 간격"
@@ -416,7 +418,7 @@ function StatusRows() {
     const f = status.found
     const rows: Array<[string, string]> = [
         ['메시지 (네이티브)', status.native === null ? '확인 중' : status.native ? '실림' : '안 실림'],
-        ['큰 화면·모달 (네이티브)', `${status.screens}회 적용`],
+        ['큰 화면·모달 (네이티브)', `효과 ${status.screens}회 · 전환 바꿈 ${status.nativeScreens}회`],
         ['설정·메뉴 화면', `${f.stack ? '연결됨' : '못 찾음'} · ${status.stack}회`],
         ['아래 창', `${f.sheets ? '연결됨' : '못 찾음'} · ${status.sheets}회`],
         ['Reanimated', `${f.worklets ? '연결됨' : '못 찾음'} · ${f.reanimated ? '준비됨' : '대기 중'}`],
@@ -425,7 +427,7 @@ function StatusRows() {
         ['배경', `${status.backdrops}회`],
         ['토스트', `${status.toasts}회`],
         ['서버 폴더', `${status.folders}회`],
-        ['채널 목록·서버 바꾸기', `${f.layout ? '연결됨' : '못 찾음'} · 서버 목록 ${f.servers ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
+        ['채널 목록·서버 바꾸기', `액션 ${f.layout ? '연결됨' : '못 찾음'} · 채널 줄 ${f.channelRows ? '연결됨' : '못 찾음'} · 서버 목록 ${f.servers ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
         ['디스코드 상수', status.constants.length ? status.constants.join(', ') : '아직 못 찾음'],
     ]
     if (status.lastError) rows.push(['마지막 오류', status.lastError])
