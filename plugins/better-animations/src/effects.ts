@@ -195,8 +195,14 @@ export const CHANNEL_LIST_EFFECTS: Effect[] = [
 // ── 서버 바꾸기 (서버를 누르면 채널 목록이 바뀔 때) ────────────────────────
 export const SERVER_EFFECTS: Effect[] = [
     { id: 'default', label: '기본 (바로)' },
+    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 28 } },
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.6 } },
+    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.92 } },
+    { id: 'zoom', label: '줌', hidden: { o: 0, s: 1.08 } },
+    { id: 'side', label: '옆에서', hidden: { o: 0, tx: -40 } },
+    { id: 'slideUp', label: '아래에서', hidden: { o: 0, tyH: 0.25 } },
+    { id: 'flip', label: '플립', hidden: { o: 0, rx: 35 } },
+    { id: 'none', label: '없음' },
 ]
 
 // ── 서버 폴더 열고 닫기 ──────────────────────────────────────────

@@ -74,8 +74,8 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
     },
     servers: {
         title: '서버 바꾸기',
-        description: '다른 서버를 눌러 채널 목록이 바뀔 때',
-        easings: LAYOUT_EASINGS,
+        description: '다른 서버를 눌러 채널 목록이 바뀔 때 채널 목록이 나타나는 효과',
+        move: true,
     },
     folder: { title: '서버 폴더', description: '서버 목록에서 폴더를 열고 닫을 때 서버 아이콘이 나타나는 모습과 펼쳐지는 속도', exit: true, move: true },
     subtle: {
@@ -425,7 +425,7 @@ function StatusRows() {
         ['배경', `${status.backdrops}회`],
         ['토스트', `${status.toasts}회`],
         ['서버 폴더', `${status.folders}회`],
-        ['채널 목록·서버 바꾸기', `${f.layout ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
+        ['채널 목록·서버 바꾸기', `${f.layout ? '연결됨' : '못 찾음'} · 서버 목록 ${f.servers ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
         ['디스코드 상수', status.constants.length ? status.constants.join(', ') : '아직 못 찾음'],
     ]
     if (status.lastError) rows.push(['마지막 오류', status.lastError])

@@ -154,12 +154,14 @@ function MessagesPreview({ s, W }: { s: ModuleSettings; W: number }) {
 /** 채널 목록 접기·펼치기 / 서버 바꾸기 (LayoutAnimation 흉내, 높이는 JS 로) */
 function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: ModuleSettings }) {
     const c = useMemo(palette, [])
-    const instant = s.effect === 'default'
+    const instant = s.effect === 'default' || s.effect === 'none'
     const scale = s.effect === 'scale'
     const { p } = useLoop(s.duration, s.easing, instant, false)
     const fade = (v: any) => ({ opacity: v, transform: scale ? [{ scale: lerp(v, 0.6, 1) }] : [] })
     if (module === 'servers') {
         const a = p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+        const h = applyMove(effectOf('servers', instant ? 'fade' : s.effect).hidden, { direction: s.direction, position: s.position }, 220, HEIGHT)
+        const enter = instant ? { opacity: p.interpolate({ inputRange: [0, 0.5, 0.51, 1], outputRange: [0, 0, 1, 1] }) } : moving(p, undefined, h, h, 220, HEIGHT)
         return (
             <View style={{ ...fill, flexDirection: 'row', padding: 12, gap: 12 }}>
                 <View style={{ width: 40, gap: 8 }}>
@@ -167,10 +169,10 @@ function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: Modu
                     <Animated.View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: lerp(p, 0, 1).interpolate({ inputRange: [0, 1], outputRange: [c.raised, c.brand] }) }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Animated.View style={[fill, fade(a)]}>
+                    <Animated.View style={[fill, { opacity: a.interpolate({ inputRange: [0, 0.99, 1], outputRange: [0, 0, 1] }) }]}>
                         <Bars color={c.muted} widths={['50%', '80%', '65%', '72%', '40%']} gap={12} />
                     </Animated.View>
-                    <Animated.View style={[fill, fade(p)]}>
+                    <Animated.View style={[fill, enter]}>
                         <Bars color={c.text} widths={['40%', '70%', '85%', '55%']} gap={12} />
                     </Animated.View>
                 </View>
