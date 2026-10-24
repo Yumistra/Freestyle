@@ -230,24 +230,65 @@ function themeColor(names: string[], fallback: string) {
     return fallback
 }
 
+/** 디스코드 버튼 종류별 색 (Button 의 variant 와 같은 토큰) */
+const VARIANTS: Record<string, string> = {
+    primary: 'CONTROL_PRIMARY',
+    secondary: 'CONTROL_SECONDARY',
+    'critical-primary': 'CONTROL_CRITICAL_PRIMARY',
+    'critical-secondary': 'CONTROL_CRITICAL_SECONDARY',
+}
+const FALLBACK: Record<string, [string, string]> = {
+    primary: ['#5865f2', '#ffffff'],
+    secondary: ['#4e5058', '#ffffff'],
+    'critical-primary': ['#da373c', '#ffffff'],
+    'critical-secondary': ['#4e5058', '#f23f43'],
+}
+function variantColors(variant: string) {
+    const p = VARIANTS[variant] ?? VARIANTS.secondary
+    const [bg, fg] = FALLBACK[variant] ?? FALLBACK.secondary
+    const bgc = themeColor([`${p}_BACKGROUND_DEFAULT`], bg)
+    const border = themeColor([`${p}_BORDER_DEFAULT`], '#00000000')
+    return {
+        bg: bgc,
+        bgActive: themeColor([`${p}_BACKGROUND_ACTIVE`], bgc),
+        border,
+        borderActive: themeColor([`${p}_BORDER_ACTIVE`], border),
+        fg: themeColor([`${p}_TEXT_DEFAULT`], fg),
+    }
+}
+
+/** 디스코드 버튼 글자 (text-sm/semibold: 글꼴을 바꾸는 플러그인도 따라감) */
+function buttonFont() {
+    try {
+        const style = D().TextStyleSheet?.['text-sm/semibold']
+        if (style?.fontFamily) return { family: String(style.fontFamily), size: Number(style.fontSize) || 14 }
+    } catch {}
+    return { family: 'ggsans-Semibold', size: 14 }
+}
+
+function buttonRadius() {
+    try {
+        const t: any = (Tokens as any).default
+        const r = t?.modules?.button?.BORDER_RADIUS ?? t?.radii?.sm
+        if (typeof r === 'number' && r >= 0) return Math.min(r, 999)
+    } catch {}
+    return 8
+}
+
+const ICON = (name: string) => `design_components_icon_native_redesign_generated_images_${name}`
+
 /** 네이티브가 없거나 메시지 줄을 못 찾으면 null */
 async function showButtons(message: any): Promise<string | null> {
     const buttons: any[] = []
-    if (editableOf(message))
-        buttons.push({
-            id: 'edit',
-            label: '수정',
-            bg: themeColor(['CONTROL_PRIMARY_BACKGROUND_DEFAULT', 'BRAND_500'], '#5865f2'),
-            fg: themeColor(['CONTROL_PRIMARY_TEXT_DEFAULT', 'WHITE'], '#ffffff'),
-        })
+    if (editableOf(message)) buttons.push({ id: 'edit', label: '수정', icon: ICON('pencilicon'), colors: variantColors('secondary') })
     buttons.push({
         id: 'delete',
         label: '삭제',
-        confirm: settings().confirmDelete ? '정말 삭제?' : '',
-        bg: themeColor(['CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT'], '#da373c'),
-        fg: themeColor(['CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT', 'WHITE'], '#ffffff'),
+        icon: ICON('trashicon'),
+        colors: variantColors('critical-secondary'),
+        confirm: settings().confirmDelete ? { label: '정말 삭제할까요?', colors: variantColors('critical-primary') } : undefined,
     })
-    const opts = { buttons, bg: themeColor(['BACKGROUND_SURFACE_HIGHEST', 'BACKGROUND_SURFACE_HIGH'], '#2b2d31'), inset: 68 }
+    const opts = { buttons, font: buttonFont(), radius: buttonRadius(), inset: 68 }
     try {
         const r = await Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.showActions`, [JSON.stringify(opts)]))
         if (r === 'norow' || typeof r !== 'string') return null
@@ -335,7 +376,7 @@ function SettingsPage({ api }: { api: any }) {
                 <TableRowGroup>
                     <TableSwitchRow
                         label="삭제는 한 번 더 눌러 확인"
-                        subLabel="밑에 버튼에서 삭제를 누르면 '정말 삭제?'로 바뀌고, 한 번 더 눌러야 지워져요"
+                        subLabel="밑에 버튼에서 삭제를 누르면 빨갛게 바뀌고, 한 번 더 눌러야 지워져요"
                         value={s.confirmDelete}
                         onValueChange={(confirmDelete: boolean) => save({ confirmDelete })}
                     />
