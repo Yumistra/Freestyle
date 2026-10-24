@@ -40,6 +40,30 @@ function stackFor(presentation: string | undefined, screenId?: unknown) {
     if ((FULL_MODALS.has(pres) || isLegacyModal(pres, screenId)) && m.modals !== false) return m
 }
 
+/**
+ * 큰 화면에서 "화면 전환" 효과를 어떻게 낼지.
+ * 안드로이드 전환과 우리 효과가 동시에 화면을 움직이면 두 겹으로 보이므로 한쪽만 움직이게 한다.
+ *  - 화면 전체가 미끄러지는 효과(슬라이드·서랍·아래에서)는 안드로이드 전환으로 (닫힐 때도 자연스럽게 거꾸로)
+ *  - 나머지는 안드로이드는 페이드(겹쳐 보이기)만 하고, 우리는 투명도 없이 위치·크기·회전만 움직인다
+ */
+interface Plan {
+    native: string
+    enter: boolean
+}
+
+function planFor(m: { effect: string; direction?: string }): Plan {
+    if (m.effect === 'none') return { native: 'none', enter: false }
+    const d = m.direction ?? 'auto'
+    if (m.effect === 'slide' || m.effect === 'drawer') {
+        const ios = m.effect === 'drawer'
+        if (d === 'auto' || d === 'left') return { native: ios ? 'ios_from_right' : 'slide_from_right', enter: false }
+        if (d === 'right') return { native: ios ? 'ios_from_left' : 'slide_from_left', enter: false }
+        if (d === 'up') return { native: 'slide_from_bottom', enter: false }
+    }
+    if (m.effect === 'slideUp' && (d === 'auto' || d === 'up')) return { native: 'slide_from_bottom', enter: false }
+    return { native: 'fade', enter: true }
+}
+
 function Enter({ children, presentation, screenId }: { children?: any; presentation?: string; screenId?: unknown }) {
     const index = useContext(IndexContext)
     const [anim] = useState(() => {
@@ -47,10 +71,15 @@ function Enter({ children, presentation, screenId }: { children?: any; presentat
         const pres = presentation ?? 'push'
         // 스택의 첫 화면은 그대로. 순서를 모르면(-1) 모달만 (모달은 첫 화면일 수 없다)
         const first = index === 0 || (index < 0 && pres === 'push')
-        if (!m || m.effect === 'none' || first) return undefined
+        if (!m || first || !planFor(m).enter) return undefined
         const { width, height } = Dimensions.get('window')
         const p = new Animated.Value(0)
-        const style = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({ current: { progress: p }, inverted: one, layouts: { screen: { width, height } } }).cardStyle
+        const { opacity: _, ...style } = makeCardInterpolator(effectOf('stack', m.effect), { move: { direction: m.direction, position: m.position } })({
+            current: { progress: p },
+            inverted: one,
+            layouts: { screen: { width, height } },
+        }).cardStyle
+        // 투명도는 안드로이드 페이드가 맡는다 (두 번 흐려지지 않게)
         return { m, p, style }
     })
     const [busy, setBusy] = useState(!!anim)
@@ -72,17 +101,9 @@ function Enter({ children, presentation, screenId }: { children?: any; presentat
 /** 네이티브 전환 종류 */
 function nativeAnimationFor(props: any) {
     const presentation = props.stackPresentation ?? 'push'
-    if (presentation !== 'push') {
-        const stack = stackFor(presentation, props.screenId)
-        // 모달에 직접 만든 효과를 쓰면 네이티브는 페이드만 (효과는 Enter 가)
-        if (stack) return stack.effect === 'none' ? 'none' : (active('modal')?.effect ?? 'fade')
-        return active('modal')?.effect
-    }
-    const push = active('push')?.effect
-    const stack = active('stack')
-    // 직접 만든 효과가 들어올 때 함께 쓸 네이티브 전환. 따로 고르지 않았으면 페이드
-    if (stack) return stack.effect === 'none' ? 'none' : (push ?? 'fade')
-    return push
+    const stack = stackFor(presentation, props.screenId)
+    if (stack) return planFor(stack).native
+    return presentation !== 'push' ? active('modal')?.effect : active('push')?.effect
 }
 
 function wrapStackChildren(children: any) {
