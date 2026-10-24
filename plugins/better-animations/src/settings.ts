@@ -93,6 +93,14 @@ export function active(key: ModuleKey): ModuleSettings | undefined {
     return m.effect === DEFAULT_ID ? undefined : m
 }
 
+/** 설정 말고 같은 파일에 같이 두는 값 (네이티브용으로 풀어 둔 효과 등) */
+export const storedExtra = (key: string) => storage?.cache?.[key]
+
+export async function setExtra(key: string, value: unknown) {
+    if (!storage) return
+    await storage.set({ ...(storage.cache ?? {}), [key]: value }, true)
+}
+
 const listeners = new Set<() => void>()
 /** 설정이 바뀌면 부를 함수 (상수 바꿔치기처럼 미리 적용해 둬야 하는 것들) */
 export function onSettingsChange(fn: () => void) {
@@ -102,7 +110,11 @@ export function onSettingsChange(fn: () => void) {
 
 export async function save(next: Settings) {
     version++
-    await storage?.set(next, true)
+    // 같이 두는 값(native 등)은 지우지 않는다
+    const extra = { ...(storage?.cache ?? {}) }
+    delete extra.enabled
+    delete extra.modules
+    await storage?.set({ ...extra, ...next }, true)
     for (const fn of listeners) {
         try {
             fn()
@@ -128,6 +140,9 @@ export const status = {
     layouts: 0,
     /** 네이티브(메시지) 부분: null = 아직 확인 전 */
     native: null as null | boolean,
+    /** 네이티브가 큰 화면 전환을 맡는지 */
+    nativeScreenHook: false,
+    nativePlayed: 0,
     constants: [] as string[],
     found: {} as Record<string, boolean>,
     lastError: '',

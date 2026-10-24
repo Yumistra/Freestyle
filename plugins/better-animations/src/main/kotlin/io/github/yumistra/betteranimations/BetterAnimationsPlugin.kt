@@ -200,7 +200,7 @@ private fun resolve(h: Hidden, direction: String, fromBelow: Boolean, density: F
 }
 
 /** 위치 설정 → 기준점 (줄 크기 비율). null 이면 가운데 그대로 */
-private fun pivotOf(position: String): Pair<Float, Float>? = when (position) {
+internal fun pivotOf(position: String): Pair<Float, Float>? = when (position) {
     "tl" -> 0f to 0f
     "t" -> 0.5f to 0f
     "tr" -> 1f to 0f
@@ -282,7 +282,7 @@ private fun curveFor(easing: String): (Float) -> Float {
     }
 }
 
-private fun interpolatorFor(easing: String): TimeInterpolator {
+internal fun interpolatorFor(easing: String): TimeInterpolator {
     val f = curveFor(easing)
     return TimeInterpolator { t -> if (t >= 1f) 1f else f(t) }
 }
@@ -739,13 +739,29 @@ val betterAnimationsPlugin = plugin {
             ),
         )
 
+        // 큰 화면 전환
+        val stack = AtomicReference(loadStackConfig(storageDir))
+        val appContext = AtomicReference<android.content.Context?>(null)
+        withAppContext { appContext.set(it.applicationContext ?: it) }
+        val screens = ScreenTransitions(classLoader, { appContext.get() }, { stack.get() })
+        val screenHook = try {
+            screens.hook()
+        } catch (e: Throwable) {
+            log.e("Failed to hook screen transitions", e)
+            null
+        }
+        if (screenHook != null) unhooks = unhooks + screenHook else log.w("Screen fragment not found; screen transitions stay in JS")
+
         // JS 설정 화면이 저장한 뒤 부른다
         registerNativeMethod("${manifest.id}.reload") {
             config.set(loadConfig(storageDir))
+            stack.set(loadStackConfig(storageDir))
             true
         }
-        // JS 쪽에서 네이티브 부분이 실렸는지 확인할 때
-        registerNativeMethod("${manifest.id}.ping") { "pong" }
+        // JS 쪽에서 네이티브 부분이 실렸는지, 화면 전환을 맡을 수 있는지 확인할 때
+        registerNativeMethod("${manifest.id}.ping") {
+            mapOf("pong" to true, "screens" to (screenHook != null), "played" to screens.played)
+        }
 
         log.i("Hooked chat list (effect=${config.get().effect}, exit=${config.get().exitEffect})")
     }
