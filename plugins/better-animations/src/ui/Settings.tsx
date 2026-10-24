@@ -39,6 +39,8 @@ interface ModuleInfo {
     exit?: boolean
     /** 방향·위치를 고를 수 있음 */
     move?: boolean
+    /** 움직임(곡선)을 고를 수 없음 (효과마다 정해져 있음) */
+    noEasing?: boolean
     /** 바꾼 뒤 앱을 다시 시작해야 확실히 적용됨 */
     restart?: boolean
     test?: () => void
@@ -54,6 +56,11 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         description: '채팅에서 메시지가 나타나고 지워질 때, 그리고 다른 메시지가 밀릴 때 (안드로이드 네이티브 부분이 처리)',
         exit: true,
         move: true,
+    },
+    lists: {
+        title: '목록 스크롤 (Cask)',
+        description: '채널·멤버·DM·설정·이모지 목록을 스크롤할 때 새로 보이는 줄에 Cask 3 효과 (메시지는 위 "메시지"에서 Cask 효과를 고를 수 있어요)',
+        noEasing: true,
     },
     stack: { title: '화면 전환', description: '설정, 설정 항목, 프로필, 검색처럼 새로 열리는 화면이 나타나고 닫히는 효과', exit: true, move: true },
     push: {
@@ -279,6 +286,7 @@ function EasingEditor({ value, onChange }: { value: EasingKey; onChange(v: Easin
 function summaryOf(key: ModuleKey, m: ModuleSettings) {
     const effect = EFFECTS[key].find(e => e.id === m.effect)?.label ?? m.effect
     if (m.effect === 'default') return '디스코드 기본'
+    if (key === 'lists' && m.effect !== 'default') return `${effect} · ${m.duration}ms`
     if (key === 'backdrop') return m.effect === 'solid' ? `단색 · ${Math.round((m.amount ?? 0.6) * 100)}%` : effect
     if (MODULES[key].native || m.effect === 'none') return effect
     return `${effect} · ${m.duration}ms · ${easingLabel(m.easing)}`
@@ -342,7 +350,7 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                     {showSpeed && (
                         <SliderField label="속도" value={value.duration} min={100} max={1500} step={20} format={v => `${v}ms`} presets={[200, 300, 400, 600, 900]} onCommit={duration => set({ duration })} />
                     )}
-                    {showSpeed && (
+                    {showSpeed && !info.noEasing && (
                         <Field label="움직임">
                             <Chips
                                 items={easingItems}
@@ -351,7 +359,7 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                             />
                         </Field>
                     )}
-                    {showSpeed && easingValue === 'custom' && <EasingEditor value={value.easing} onChange={easing => set({ easing })} />}
+                    {showSpeed && !info.noEasing && easingValue === 'custom' && <EasingEditor value={value.easing} onChange={easing => set({ easing })} />}
                     {info.move && custom && (
                         <Field label="방향">
                             <Chips items={DIRECTIONS} value={value.direction ?? 'auto'} onChange={direction => set({ direction })} />
@@ -361,6 +369,9 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                         <Field label="기준 위치 (커지고 작아지는 점)">
                             <Chips items={POSITIONS} value={value.position ?? 'auto'} onChange={position => set({ position })} />
                         </Field>
+                    )}
+                    {id === 'lists' && custom && (
+                        <SwitchRow label="처음 나타날 때도" subLabel="스크롤할 때뿐 아니라 목록이 처음 열릴 때도 (Cask 의 Fresh View)" value={!!value.always} onChange={always => set({ always })} />
                     )}
                     {id === 'stack' && custom && (
                         <SwitchRow label="모달 화면에도" subLabel="설정처럼 아래에서 올라오는 화면에도 이 효과를 써요" value={value.modals !== false} onChange={modals => set({ modals })} />
@@ -434,6 +445,7 @@ function StatusRows() {
         ['토스트', `${status.toasts}회`],
         ['알림 배너', `${status.notices}회`],
         ['서버 폴더', `${status.folders}회`],
+        ['목록 스크롤 (JS)', `${Object.keys(f).filter(k => k.startsWith('list:')).map(k => k.slice(5)).join(', ') || '못 찾음'} · ${status.listCells}회`],
         ['채널 목록·서버 바꾸기', `액션 ${f.layout ? '연결됨' : '못 찾음'} · 채널 줄 ${f.channelRows ? '연결됨' : '못 찾음'} · 서버 목록 ${f.servers ? '연결됨' : '못 찾음'} · ${status.layouts}회`],
         ['디스코드 상수', status.constants.length ? status.constants.join(', ') : '아직 못 찾음'],
     ]

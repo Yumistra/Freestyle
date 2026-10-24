@@ -74,7 +74,7 @@ private data class Config(
     val shift: Boolean = true,
     val shiftDuration: Long = 200L,
 ) {
-    val enterOn get() = enabled && hiddenFor(effect) != null
+    val enterOn get() = enabled && (Cask.styleOf(effect) != null || hiddenFor(effect) != null)
     val exitEffect get() = if (exit.isEmpty() || exit == "same") effect else exit
     val exitOn get() = enabled && hiddenFor(exitEffect) != null
     val shiftOn get() = enabled && shift
@@ -144,7 +144,8 @@ private fun hiddenFor(effect: String): Hidden? = when (effect) {
     "circle" -> Hidden(reveal = true)
     "outOfBounds" -> Hidden(alpha = 1f, dxW = 0.9f, scale = 1.25f, rotation = 4f)
     "wave" -> Hidden(dy = 22f, rotation = -5f, minStagger = 45L)
-    else -> null // default, none
+    // Cask 효과는 따로 돌린다. 지워질 땐 페이드로
+    else -> if (effect.startsWith("cask.")) Hidden() else null // default, none
 }
 
 /** 방향까지 풀어서 px 로 바꾼 값 */
@@ -411,6 +412,18 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         val stagger = max(c.stagger, hidden.minStagger)
         val delay = ((batch.size - 1) * stagger).coerceAtMost(stagger * 12L)
 
+        // Cask 효과: 처음 모습을 바로 적용하고 시작한다
+        Cask.styleOf(c.effect)?.let { style ->
+            running[child] = Cask.start(child, style, c.duration, delay) {
+                val a = running[child]
+                if (a != null && !a.isRunning) {
+                    running.remove(child)
+                    clear(child)
+                }
+            }
+            return
+        }
+
         // 레이아웃 전이라 위치를 모른다. 먼저 숨겨 두고, 다음 프레임에 방향을 정해 시작한다
         child.alpha = hidden.alpha
         child.scaleX = hidden.scale
@@ -640,6 +653,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         child.rotationX = 0f
         child.rotationY = 0f
         Blur.clear(child)
+        Cask.clear(child)
         if (Build.VERSION.SDK_INT >= 28 && child.isPivotSet) child.resetPivot()
     }
 }
@@ -676,6 +690,20 @@ val betterAnimationsPlugin = plugin {
         fun chat(param: XC_MethodHook.MethodHookParam): ViewGroup? =
             param.thisObject.takeIf { chatListView.isInstance(it) } as? ViewGroup
 
+        // 채팅 말고 다른 네이티브 목록 (Cask 효과)
+        val listsConfig = AtomicReference(loadListsConfig(storageDir))
+        val lists = ListRows { listsConfig.get() }
+        val getScrollState: Method? = try {
+            recyclerView.getMethod("getScrollState")
+        } catch (e: Throwable) {
+            null
+        }
+        fun otherList(param: XC_MethodHook.MethodHookParam): ViewGroup? {
+            val v = param.thisObject as? ViewGroup ?: return null
+            if (chatListView.isInstance(v) || v.javaClass.name.contains("MessageAccessories")) return null
+            return v
+        }
+
         unhooks = listOf(
             XposedHelpers.findAndHookMethod(
                 recyclerView,
@@ -683,8 +711,19 @@ val betterAnimationsPlugin = plugin {
                 View::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val parent = chat(param) ?: return
                         val child = param.args[0] as? View ?: return
+                        val parent = chat(param)
+                        if (parent == null) {
+                            if (listsConfig.get() == null) return
+                            val list = otherList(param) ?: return
+                            try {
+                                val scrolling = (getScrollState?.invoke(list) as? Int ?: 0) != 0
+                                lists.onAttached(list, child, scrolling)
+                            } catch (e: Throwable) {
+                                log.e("Failed to animate list row", e)
+                            }
+                            return
+                        }
                         try {
                             rows.onAttached(parent, child)
                         } catch (e: Throwable) {
@@ -699,8 +738,12 @@ val betterAnimationsPlugin = plugin {
                 View::class.java,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        val parent = chat(param) ?: return
                         val child = param.args[0] as? View ?: return
+                        val parent = chat(param)
+                        if (parent == null) {
+                            if (otherList(param) != null) lists.reset(child)
+                            return
+                        }
                         try {
                             rows.onDetached(parent, child)
                         } catch (e: Throwable) {
@@ -756,6 +799,7 @@ val betterAnimationsPlugin = plugin {
         registerNativeMethod("${manifest.id}.reload") {
             config.set(loadConfig(storageDir))
             stack.set(loadStackConfig(storageDir))
+            listsConfig.set(loadListsConfig(storageDir))
             true
         }
         // JS 쪽에서 네이티브 부분이 실렸는지, 화면 전환을 맡을 수 있는지 확인할 때

@@ -2,6 +2,7 @@ import { pingNative, syncNative } from './native'
 import { patchChannelRows } from './patches/channels'
 import { patchConstants } from './patches/constants'
 import { patchLayout, patchServerSwitch } from './patches/layout'
+import { patchLists } from './patches/lists'
 import { patchNativeScreens } from './patches/screens'
 import { patchSheets } from './patches/sheets'
 import { patchJsStack } from './patches/stack'
@@ -40,6 +41,7 @@ export default plugin({
         tryPatch('layout', patchLayout)
         tryPatch('servers', () => patchServerSwitch(cleanup))
         tryPatch('channelRows', () => patchChannelRows(cleanup))
+        tryPatch('lists', () => patchLists(cleanup))
         // 메시지 애니메이션은 네이티브가 설정 파일을 직접 읽는다
         cleanup(onSettingsChange(() => syncNative()) as any)
         syncNative().then(() => pingNative())

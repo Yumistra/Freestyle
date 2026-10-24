@@ -8,6 +8,7 @@
 
 export type ModuleKey =
     | 'messages'
+    | 'lists'
     | 'stack'
     | 'push'
     | 'modal'
@@ -87,6 +88,34 @@ export const MESSAGE_EFFECTS: Effect[] = [
     { id: 'wave', label: '물결', hidden: { o: 0, ty: 22, r: -5 } },
     { id: 'none', label: '없음' },
 ]
+
+// ── Cask 3 (iOS 목록 스크롤 애니메이션) ─────────────────────────────
+// https://github.com/ryannair05/Cask-3 의 15가지 효과. id 는 "cask.<이름>"
+// hidden 은 미리보기·지워질 때용 근사치. 실제 움직임은 네이티브(Cask.kt)와 JS(CaskCell)가 원본대로 그린다
+export const CASK_STYLES: Array<{ name: string; label: string; hidden: Hidden }> = [
+    { name: 'fade', label: '페이드', hidden: { o: 0 } },
+    { name: 'flip', label: '플립', hidden: { rx: 180 } },
+    { name: 'bounce', label: '바운스', hidden: { s: 1, sy: 1, o: 0.2 } },
+    { name: 'color', label: '컬러', hidden: { o: 0.6 } },
+    { name: 'permanentColor', label: '영구 컬러', hidden: { o: 0.6 } },
+    { name: 'glitch', label: '글리치', hidden: { s: 0.4 } },
+    { name: 'helix', label: '헬릭스', hidden: { ry: 180 } },
+    { name: 'rotate', label: '회전', hidden: { r: 106 } },
+    { name: 'zoom', label: '줌', hidden: { s: 5 } },
+    { name: 'drop', label: '드롭', hidden: { ty: -150 } },
+    { name: 'stretch', label: '스트레치', hidden: { o: 0.2 } },
+    { name: 'slide', label: '슬라이드', hidden: { txW: 1 } },
+    { name: 'shake', label: '셰이크', hidden: { tx: 10 } },
+    { name: 'swing', label: '스윙', hidden: { tx: 40 } },
+    { name: 'jiggle', label: '지글', hidden: { r: 4 } },
+]
+
+const caskEffects = (prefix: string): Effect[] => CASK_STYLES.map(c => ({ id: `cask.${c.name}`, label: `${prefix}${c.label}`, hidden: c.hidden }))
+
+export const caskStyleOf = (id: string | undefined) => (id?.startsWith('cask.') ? id.slice(5) : undefined)
+
+// ── 목록 스크롤 (스크롤해서 새로 보이는 줄) ─────────────────────────────
+export const LIST_EFFECTS: Effect[] = [{ id: 'default', label: '기본 (없음)' }, ...caskEffects('')]
 
 // ── 설정·메뉴 화면 (디스코드 안쪽 화면 전환) ─────────────────────────────
 export const STACK_EFFECTS: Effect[] = [
@@ -243,8 +272,11 @@ export const SUBTLE_EFFECTS: Effect[] = [
     { id: 'custom', label: '직접 설정', hidden: { o: 0, s: 0.5 } },
 ]
 
+MESSAGE_EFFECTS.splice(MESSAGE_EFFECTS.length - 1, 0, ...caskEffects('Cask · '))
+
 export const EFFECTS: Record<ModuleKey, Effect[]> = {
     messages: MESSAGE_EFFECTS,
+    lists: LIST_EFFECTS,
     panel: PANEL_EFFECTS,
     channelList: CHANNEL_LIST_EFFECTS,
     servers: SERVER_EFFECTS,
@@ -277,6 +309,7 @@ export function exitEffectOf(module: ModuleKey, enter: string, exit: string | un
 /** 미리보기에서 "기본"을 보여 줄 때 쓰는 디스코드 기본 동작의 근사치 */
 export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: number; easing: EasingKey }> = {
     messages: { effect: 'none', duration: 0, easing: 'linear' },
+    lists: { effect: 'none', duration: 0, easing: 'linear' },
     stack: { effect: 'slide', duration: 350, easing: 'out' },
     push: { effect: 'fade_from_bottom', duration: 300, easing: 'out' },
     modal: { effect: 'slide_from_bottom', duration: 350, easing: 'out' },
