@@ -82,3 +82,18 @@ export function nativeMediaUnwind(opts: { duration: number; easing: string }) {
     if (status.native !== true) return
     call('mediaUnwind', [JSON.stringify(opts)]).catch(() => {})
 }
+
+export type MediaRect = { x: number; y: number; w: number; h: number }
+
+/** 사진·동영상 보기: 처음 누른 썸네일이 든 묶음의 칸 자리들 (창 좌표, dp). index = 처음 누른 칸 */
+export function nativeMediaSiblings(origin: MediaRect): Promise<{ index: number; rects: MediaRect[] } | undefined> {
+    if (status.native !== true) return Promise.resolve(undefined)
+    return call('mediaSiblings', [JSON.stringify(origin)]).then(
+        (r: any) => {
+            if (typeof r !== 'string' || !r) return
+            const o = JSON.parse(r)
+            return typeof o?.index === 'number' && Array.isArray(o.rects) ? o : undefined
+        },
+        () => undefined,
+    )
+}
