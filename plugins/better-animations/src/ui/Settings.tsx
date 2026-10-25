@@ -253,7 +253,19 @@ function SliderField({
     return (
         <Field label={label} trailing={format(v)}>
             {Slider ? (
-                <Slider value={v} minimumValue={min} maximumValue={max} step={step} onValueChange={(x: number) => setV(round(x))} onSlidingComplete={(x: number) => onCommit(round(x))} />
+                <Slider
+                    value={v}
+                    step={step}
+                    // 디스코드 버전마다 이름이 다르다 (351: minimumValue·onSlidingComplete, 352+: minValue·onChangeEnd)
+                    minimumValue={min}
+                    maximumValue={max}
+                    minValue={min}
+                    maxValue={max}
+                    onValueChange={(x: unknown) => typeof x === 'number' && setV(round(x))}
+                    onChange={(x: unknown) => typeof x === 'number' && setV(round(x))}
+                    onSlidingComplete={(x: unknown) => typeof x === 'number' && onCommit(round(x))}
+                    onChangeEnd={(x: unknown) => typeof x === 'number' && onCommit(round(x))}
+                />
             ) : (
                 <Chips
                     items={presets.map(n => ({ id: String(n), label: format(n) }))}

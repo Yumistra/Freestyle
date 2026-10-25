@@ -403,7 +403,19 @@ function AlphaSlider({ value, onChange, onCommit }: { value: number; onChange(v:
             }
             subLabel={
                 Slider ? (
-                    <Slider value={value} minimumValue={0} maximumValue={0.9} step={0.05} onValueChange={onChange} onSlidingComplete={onCommit} />
+                    <Slider
+                        value={value}
+                        step={0.05}
+                        // 디스코드 버전마다 이름이 다르다 (351: minimumValue·onSlidingComplete, 352+: minValue·onChangeEnd)
+                        minimumValue={0}
+                        maximumValue={0.9}
+                        minValue={0}
+                        maxValue={0.9}
+                        onValueChange={(x: unknown) => typeof x === 'number' && onChange(x)}
+                        onChange={(x: unknown) => typeof x === 'number' && onChange(x)}
+                        onSlidingComplete={(x: unknown) => typeof x === 'number' && onCommit(x)}
+                        onChangeEnd={(x: unknown) => typeof x === 'number' && onCommit(x)}
+                    />
                 ) : undefined
             }
         />
