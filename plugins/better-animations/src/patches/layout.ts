@@ -21,9 +21,10 @@ import { active, report, status, type ModuleSettings } from '../settings'
  * (RedesignChannelList) 전체를 Animated.View 로 감싸고, 고른 서버가 바뀌면 그 효과를 재생한다.
  * (BetterDiscord 의 Servers 모듈)
  *
- * 옛 목록이 나가는 효과: 서버를 바꾸는 액션(CHANNEL_SELECT)을 잠깐 붙잡고,
- * 네이티브가 지금 목록을 찍어 그 위에 덮은 뒤(나가는 효과로 치움) 액션을 보낸다 → 새 목록은 그 밑에서 나타난다.
- * 네이티브가 없으면 옛 목록을 먼저 내보내고 바꾼다. 붙잡는 동안 들어온 다른 액션은 순서대로 뒤에 보낸다.
+ * 옛 목록이 나가는 효과: 서버를 바꾸는 액션(CHANNEL_SELECT)이 지나갈 때, 액션보다 먼저 네이티브에
+ * "지금 목록을 찍어 덮어라"를 보낸다. JS 가 새 목록을 그리기 전에 네이티브가 찍으므로 옛 목록이 찍히고,
+ * 그 그림은 나가는 효과로 치워지며 새 목록은 그 밑에서 나타난다.
+ * (액션을 붙잡으면 디스코드 화면이 선택 상태를 맞추려다 무한 반복에 빠지므로 붙잡지 않는다)
  */
 
 /** 서버의 채널 목록, DM 목록 */
@@ -56,8 +57,6 @@ function play(value: Animated.Value, m: ModuleSettings, done?: () => void) {
 interface Instance {
     nativeId: string
     kind: 'guild' | 'dm'
-    /** 옛 목록을 JS 로 내보내기 (네이티브가 없을 때) */
-    leave(m: ModuleSettings): Promise<void>
 }
 const instances = new Set<Instance>()
 let instanceSeq = 0
@@ -68,25 +67,11 @@ function exitPose(m: ModuleSettings, W: number, H: number) {
 
 function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; __kind: 'guild' | 'dm' }) {
     const [value] = useState(() => new Animated.Value(1))
-    const [closing] = useState(() => new Animated.Value(0))
     const [busy, setBusy] = useState(false)
     const [nativeId] = useState(() => `better-animations-guild-${instanceSeq++}`)
     const last = useRef<string | null | undefined>(undefined)
     useEffect(() => {
-        const inst: Instance = {
-            nativeId,
-            kind: __kind,
-            leave: m =>
-                new Promise(resolve => {
-                    closing.setValue(1)
-                    setBusy(true)
-                    const run =
-                        m.easing === 'spring'
-                            ? Animated.spring(value, { toValue: 0, ...springFor(m.duration * 0.6, 1), useNativeDriver: true } as any)
-                            : Animated.timing(value, { toValue: 0, duration: Math.round(m.duration * 0.6), easing: easingFrom(Easing, m.easing), useNativeDriver: true })
-                    run.start(() => resolve())
-                }),
-        }
+        const inst: Instance = { nativeId, kind: __kind }
         instances.add(inst)
         const check = () => {
             const g = currentGuild()
@@ -96,7 +81,6 @@ function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; _
             seenGuild = g
             const m = active('servers')
             if (changed && m && m.effect !== 'none') {
-                closing.setValue(0)
                 setBusy(true)
                 play(value, m, () => setBusy(false))
             }
@@ -115,45 +99,32 @@ function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; _
         const { width, height } = Dimensions.get('window')
         const move = { direction: m.direction, position: m.position }
         const h = applyMove(effectOf('servers', m.effect).hidden, move, width, height)
-        const parts = partsFor(value, h, width, height, undefined, exitPose(m, width, height), closing)
+        const parts = partsFor(value, h, width, height, undefined)
         style = [{ flex: 1 }, { transform: parts.transform, ...(parts.opacity ? { opacity: parts.opacity } : {}) }]
     }
     return createElement(Animated.View, { style, nativeID: nativeId, collapsable: false, renderToHardwareTextureAndroid: busy }, createElement(__type, __props))
 }
 
-// ── 액션 붙잡기 ──────────────────────────────────────────────────
+// ── 옛 목록 내보내기 ──────────────────────────────────────────────
 
-/** 옛 목록을 찍어 덮을 때까지 기다리는 최대 시간 (ms) */
-const HOLD_MAX = 180
-
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-
-/** 서버가 바뀌는 액션이면, 옛 목록을 치우기 시작할 때까지 기다릴 약속 */
-function guildHold(action: any): Promise<void> | undefined {
+/** 서버가 바뀌는 액션이면 (액션보다 먼저) 네이티브에 옛 목록을 찍어 치우라고 보낸다 */
+function guildOut(action: any) {
     const type = action?.type
     if ((type !== 'CHANNEL_SELECT' && type !== 'GUILD_SELECT') || !action || !('guildId' in action)) return
     const next = action.guildId ?? null
     const cur = currentGuild()
-    if (cur === undefined || next === cur) return
+    if (cur === undefined || next === cur || !instances.size) return
     const m = active('servers')
-    if (!m || m.effect === 'none' || !instances.size) return
+    if (!m || m.effect === 'none') return
     const { width, height } = Dimensions.get('window')
     const pose = exitPose(m, width, height)
-    const visible = [...instances].filter(i => i.kind === (cur === null ? 'dm' : 'guild'))
-    const ids = [...visible, ...[...instances].filter(i => !visible.includes(i))].map(i => i.nativeId)
-    const fallback = visible[0]
-    const deadline = Date.now() + HOLD_MAX
-    return Promise.race([
-        nativeGuildOut({ ids, pose, duration: m.duration, easing: m.easing, position: m.position ?? 'auto', deadline }).then(r => {
-            if (r === 'ok') {
-                status.layouts++
-                return
-            }
-            // 네이티브가 없으면 옛 목록을 먼저 내보낸다 (보이는 목록이 없으면 그냥 바꿈)
-            if ((r === 'nonative' || r === 'error' || r === 'old') && fallback && Date.now() < deadline) return Promise.race([fallback.leave(m), sleep(Math.round(m.duration * 0.6) + 40)])
-        }),
-        sleep(HOLD_MAX + (instances.size ? Math.round(m.duration * 0.6) : 0)),
-    ]).catch(() => {})
+    const all = [...instances]
+    const visible = all.filter(i => i.kind === (cur === null ? 'dm' : 'guild'))
+    const ids = [...visible, ...all.filter(i => !visible.includes(i))].map(i => i.nativeId)
+    nativeGuildOut({ ids, pose, duration: m.duration, easing: m.easing, position: m.position ?? 'auto', deadline: Date.now() + 400 }).then(r => {
+        if (r === 'ok') status.layouts++
+        else if (r !== 'noview' && r !== 'nonative') report('servers', `native ${r}`)
+    })
 }
 
 export function patchServerSwitch(cleanup: (...fns: Array<() => unknown>) => void) {
@@ -246,85 +217,36 @@ function collapseDelay(action: any) {
     return hideCollapsing(type === 'CATEGORY_COLLAPSE' ? categoryIdOf(action) : undefined, m)
 }
 
-interface Queued {
-    self: unknown
-    args: any[]
-    orig: (...a: any[]) => any
-    resolve(v: unknown): void
-}
-/** 서버 바꾸기 액션을 붙잡고 있는 동안 */
-let blocked = false
-const queue: Queued[] = []
-
-function runNow(self: unknown, args: any[], orig: (...a: any[]) => any) {
-    let wait = 0
-    try {
-        wait = collapseDelay(args[0])
-    } catch (e) {
-        report('layout', e)
-    }
-    if (wait > 0) {
-        return new Promise(resolve => {
-            setTimeout(() => {
-                try {
-                    onAction(args[0])
-                } catch (e) {
-                    report('layout', e)
-                }
-                resolve(orig.apply(self, args))
-            }, wait)
-        })
-    }
-    try {
-        onAction(args[0])
-    } catch (e) {
-        report('layout', e)
-    }
-    return orig.apply(self, args)
-}
-
-function handle(self: unknown, args: any[], orig: (...a: any[]) => any, queued = false): unknown {
-    if (!queued && (blocked || queue.length)) return new Promise(resolve => queue.push({ self, args, orig, resolve }))
-    let hold: Promise<void> | undefined
-    try {
-        if (!args[0]?.__betterAnimations) hold = guildHold(args[0])
-    } catch (e) {
-        report('servers', e)
-    }
-    if (!hold) return runNow(self, args, orig)
-    blocked = true
-    return new Promise(resolve => {
-        hold!.then(() => {
-            blocked = false
-            try {
-                resolve(runNow(self, args, orig))
-            } catch (e) {
-                report('servers', e)
-                resolve(undefined)
-            }
-            pump()
-        })
-    })
-}
-
-/** 붙잡는 동안 쌓인 액션을 순서대로 */
-function pump() {
-    while (!blocked && queue.length) {
-        const q = queue.shift()!
-        try {
-            q.resolve(handle(q.self, q.args, q.orig, true))
-        } catch (e) {
-            report('layout', e)
-            q.resolve(undefined)
-        }
-    }
-}
-
 export function patchLayout() {
     const D: any = Dispatcher
     if (typeof D?.dispatch !== 'function') throw new Error('Dispatcher를 찾지 못함')
     status.found.layout = true
     return instead(D, 'dispatch', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
-        return handle(this, args, orig)
+        let wait = 0
+        try {
+            if (!args[0]?.__betterAnimations) guildOut(args[0])
+            wait = collapseDelay(args[0])
+        } catch (e) {
+            report('layout', e)
+        }
+        if (wait > 0) {
+            const self = this
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    try {
+                        onAction(args[0])
+                    } catch (e) {
+                        report('layout', e)
+                    }
+                    resolve(orig.apply(self, args))
+                }, wait)
+            })
+        }
+        try {
+            onAction(args[0])
+        } catch (e) {
+            report('layout', e)
+        }
+        return orig.apply(this, args)
     })
 }
