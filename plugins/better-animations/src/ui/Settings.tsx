@@ -155,6 +155,7 @@ function Chips<T extends string>({ items, value, onChange }: { items: Array<{ id
 }
 
 /** 기준 위치: 자동 + 3×3 칸 */
+const ORIGIN_ARROWS: Record<string, string> = { tl: '↖', t: '↑', tr: '↗', l: '←', c: '○', r: '→', bl: '↙', b: '↓', br: '↘' }
 const ORIGIN_ROWS: Position[][] = [
     ['tl', 't', 'tr'],
     ['l', 'c', 'r'],
@@ -184,8 +185,12 @@ function OriginPicker({ value, onChange }: { value: Position; onChange(v: Positi
                                 <Pressable
                                     key={id}
                                     onPress={() => onChange(id)}
-                                    style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: on ? c.brand : c.surface, borderWidth: 1, borderColor: on ? c.brand : c.border }}
-                                />
+                                    style={{ width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.brand : c.surface, borderWidth: 1, borderColor: on ? c.brand : c.border }}
+                                >
+                                    <Text variant="text-sm/bold" style={{ color: on ? '#ffffff' : c.muted }}>
+                                        {ORIGIN_ARROWS[id]}
+                                    </Text>
+                                </Pressable>
                             )
                         })}
                     </View>
