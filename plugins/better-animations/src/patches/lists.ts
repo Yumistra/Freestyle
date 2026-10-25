@@ -1,7 +1,8 @@
 import { getModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
-import { createElement, useEffect, useState } from 'react'
+import { ReactNavigationNative } from '@revenge-mod/externals/react-navigation'
+import { createContext, createElement, useContext, useEffect, useState } from 'react'
 import { Animated, Dimensions, Easing } from 'react-native'
 import * as RN from 'react-native'
 import { caskStyleOf } from '../effects'
@@ -92,21 +93,46 @@ export const randomColor = () => `rgb(${Math.floor(Math.random() * 256)},${Math.
 
 const fill = { position: 'absolute' as const, top: 0, bottom: 0, left: 0, right: 0 }
 
-function CaskCell({ children, scrolled }: { children: any; scrolled?: boolean }) {
+/** 이 줄이 있는 화면 (다시 보일 때 효과를 다시 재생하려고) */
+const FallbackNav = createContext<any>(undefined)
+const NavContext: any = (ReactNavigationNative as any)?.NavigationContext ?? FallbackNav
+
+function CaskCell({ children, scrolled, reveal, index = 0 }: { children: any; scrolled?: boolean; reveal?: boolean; index?: number }) {
+    const navigation = useContext(NavContext) as any
     const [st] = useState(() => {
         const m = active('lists')
         const style = caskStyleOf(m?.effect)
-        const play = !!m && !!style && (m.always || scrolling() || !!scrolled)
-        return { play, style: style ?? '', duration: m?.duration ?? 500, p: new Animated.Value(play ? 0 : 1), color: randomColor() }
+        // reveal: 서버 목록처럼 화면에 나타날 때마다 다시 재생하는 줄
+        const play = !!m && !!style && (m.always || scrolling() || !!scrolled || !!reveal)
+        return { play, live: play || (!!reveal && !!style), style: style ?? '', duration: m?.duration ?? 500, p: new Animated.Value(play ? 0 : 1), color: randomColor() }
     })
     useEffect(() => {
-        if (!st.play) return
-        status.listCells++
-        const run = caskRun(st.style, st.p, st.duration)
-        run.start()
-        return () => run.stop()
+        if (!st.live) return
+        let run: any
+        let timer: any
+        // 나타날 땐 위에서부터 차례로
+        const start = (stagger: boolean) => {
+            run?.stop()
+            clearTimeout(timer)
+            st.p.setValue(0)
+            status.listCells++
+            const go = () => {
+                run = caskRun(st.style, st.p, st.duration)
+                run.start()
+            }
+            const delay = stagger ? Math.min(index, 12) * 28 : 0
+            if (delay) timer = setTimeout(go, delay)
+            else go()
+        }
+        if (st.play) start(!!reveal && !scrolled)
+        const off = reveal && typeof navigation?.addListener === 'function' ? navigation.addListener('focus', () => start(true)) : undefined
+        return () => {
+            run?.stop()
+            clearTimeout(timer)
+            if (typeof off === 'function') off()
+        }
     }, [])
-    if (!st.play) return children
+    if (!st.live) return children
     const v = caskVisual(st.style, st.p, Dimensions.get('window').width)
     return createElement(
         Animated.View,
@@ -201,11 +227,12 @@ function movedRecently(sv: any) {
 
 const fastCache = new WeakMap<Function, WeakMap<object, Function>>()
 const NO_SV = {}
+const REVEAL = {}
 
 /** Discord FastList (서버 목록 등): renderItem(section, row, …) */
-function wrapFastRenderItem(orig: any, sv: any) {
+function wrapFastRenderItem(orig: any, sv: any, reveal: boolean) {
     if (typeof orig !== 'function') return orig
-    const svKey = sv && typeof sv === 'object' ? sv : NO_SV
+    const svKey = sv && typeof sv === 'object' ? sv : reveal ? REVEAL : NO_SV
     let bySv = fastCache.get(orig)
     if (!bySv) {
         bySv = new WeakMap()
@@ -217,7 +244,7 @@ function wrapFastRenderItem(orig: any, sv: any) {
             const el = orig.apply(this, arguments as any)
             try {
                 if (!el || !active('lists')) return el
-                return createElement(CaskCell, { key: `${section}:${row}`, scrolled: movedRecently(sv) }, el)
+                return createElement(CaskCell, { key: `${section}:${row}`, scrolled: movedRecently(sv), reveal, index: typeof row === 'number' ? row : 0 }, el)
             } catch (e) {
                 report('lists', e)
                 return el
@@ -227,6 +254,9 @@ function wrapFastRenderItem(orig: any, sv: any) {
     }
     return w
 }
+
+/** 왼쪽 서버 목록 */
+const GUILDS_BAR = 'guilds-bar-fast-list'
 
 /** 스크롤 이벤트가 오는 동안은 스크롤 중으로 본다 (FastList 는 끌기 시작·끝 이벤트를 안 넘겨줄 수 있어서) */
 const scrolled = () => {
@@ -244,7 +274,7 @@ function patchFastList(type: any) {
                 args[0],
                 {
                     ...props,
-                    renderItem: wrapFastRenderItem(props.renderItem, props.scrollPosValue),
+                    renderItem: wrapFastRenderItem(props.renderItem, props.scrollPosValue, props.nativeID === GUILDS_BAR),
                     onScroll: typeof props.onScroll === 'function' || props.onScroll === undefined ? wrapHandler(props.onScroll, scrolled) : props.onScroll,
                     onScrollBeginDrag: wrapHandler(props.onScrollBeginDrag, begin),
                     onScrollEndDrag: wrapHandler(props.onScrollEndDrag, endDrag),
