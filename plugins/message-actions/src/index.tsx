@@ -348,6 +348,40 @@ function wrapInstance(inst: any) {
     }
     ;(wrapped as any).__messageActions = true
     inst.handleDoubleTapMessage = wrapped
+
+    // 세게 당기기 (수정): 디스코드는 내 메시지만 수정으로 넘긴다. 지울 권한이 있는 남의 메시지면 밑에 버튼으로
+    const origEdit = inst?.handleInitiateEdit
+    if (typeof origEdit === 'function' && !origEdit.__messageActions) {
+        const wrappedEdit = function (this: unknown, event: any) {
+            try {
+                mods()
+                if (settings().swipe === 'buttons') {
+                    const data = snowflakeUtils?.getNativeSyntheticEventData?.(event) ?? event?.nativeEvent ?? event
+                    const result = data?.messageId ? inst.getMessageData?.(data.messageId) : undefined
+                    const message = result?.message
+                    const channel = result?.messageChannel
+                    if (message && channel && !isMine(message) && canManageMessages(channel)) {
+                        inlineActions(inst, message, channel, inst.params?.chatInputRef, 'message_swipe')
+                        return
+                    }
+                }
+            } catch {}
+            return origEdit.apply(this, arguments as any)
+        }
+        ;(wrappedEdit as any).__messageActions = true
+        inst.handleInitiateEdit = wrappedEdit
+    }
+}
+
+/** 남의 메시지라도 지울 권한이 있으면 세게 당길 수 있게 (줄 데이터의 canEdit → 당기기 종류 REPLY_EDIT) */
+function swipeRowPatch(args: any[]) {
+    const row = args[0]
+    if (!row || row.canEdit || !row.canReply || settings().swipe !== 'buttons') return args
+    const message = row.message
+    if (!message || isMine(message)) return args
+    const channel = (Stores as any).ChannelStore?.getChannel?.(message.channel_id ?? message.getChannelId?.())
+    if (!canManageMessages(channel)) return args
+    return [{ ...row, canEdit: true }, ...args.slice(1)]
 }
 
 // ── 지우기 전에 수정 (Edit Before Delete) ─────────────────────────────
@@ -489,6 +523,20 @@ export default plugin({
                                 else openActions(undefined, message, channel)
                                 return
                             }
+                        } catch {}
+                        return orig.apply(this, args)
+                    }),
+                )
+            }) as any,
+        )
+        // 지울 권한이 있는 남의 메시지도 세게 당길 수 있게 (당기면 handleInitiateEdit → 위에서 밑에 버튼으로)
+        cleanup(
+            getModules(withProps('generateMessageRowData') as any, (mod: any) => {
+                if (typeof mod?.generateMessageRowData !== 'function') return
+                cleanup(
+                    instead(mod, 'generateMessageRowData', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        try {
+                            args = swipeRowPatch(args)
                         } catch {}
                         return orig.apply(this, args)
                     }),
