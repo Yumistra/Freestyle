@@ -120,16 +120,29 @@ function CaskCell({ children, scrolled, reveal, index = 0 }: { children: any; sc
                 run = caskRun(st.style, st.p, st.duration)
                 run.start()
             }
-            const delay = stagger ? Math.min(index, 12) * 28 : 0
+            const delay = stagger ? Math.min(index, 10) * 18 : 0
             if (delay) timer = setTimeout(go, delay)
             else go()
         }
         if (st.play) start(!!reveal && !scrolled)
-        const off = reveal && typeof navigation?.addListener === 'function' ? navigation.addListener('focus', () => start(true)) : undefined
+        // 다른 화면에 가려졌다가 다시 보일 때만 (잠깐 스치는 포커스 변화는 무시)
+        let blurAt = 0
+        const subs: any[] = []
+        if (reveal && typeof navigation?.addListener === 'function') {
+            subs.push(
+                navigation.addListener('blur', () => {
+                    blurAt = Date.now()
+                }),
+                navigation.addListener('focus', () => {
+                    if (blurAt && Date.now() - blurAt > 400) start(true)
+                    blurAt = 0
+                }),
+            )
+        }
         return () => {
             run?.stop()
             clearTimeout(timer)
-            if (typeof off === 'function') off()
+            for (const off of subs) if (typeof off === 'function') off()
         }
     }, [])
     if (!st.live) return children
