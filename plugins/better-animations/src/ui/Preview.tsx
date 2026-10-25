@@ -356,7 +356,7 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
         // 채팅의 사진 → 전체 화면 보기
         const thumb = { left: 46, top: 40, width: 70, height: 52 }
         const full = { left: 10, top: 14, width: W - 20, height: HEIGHT - 28 }
-        const zoom = shown.effect === 'zoom' || instant
+        const zoom = shown.effect === 'zoom' || shown.effect === 'grow' || instant
         const [h] = hFor(full.width, full.height)
         const card = zoom
             ? {

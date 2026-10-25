@@ -15,7 +15,7 @@ import {
     encodeEasing,
     exitChoices,
     isCustomEasing,
-    POSITIONS,
+    type Position,
     SAME_ID,
     type CustomEasing,
     type EasingKey,
@@ -151,6 +151,47 @@ function Chips<T extends string>({ items, value, onChange }: { items: Array<{ id
                 )
             })}
         </ScrollView>
+    )
+}
+
+/** 기준 위치: 자동 + 3×3 칸 */
+const ORIGIN_ROWS: Position[][] = [
+    ['tl', 't', 'tr'],
+    ['l', 'c', 'r'],
+    ['bl', 'b', 'br'],
+]
+
+function OriginPicker({ value, onChange }: { value: Position; onChange(v: Position): void }) {
+    const { Text } = D()
+    const c = useMemo(palette, [])
+    const auto = value === 'auto'
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Pressable
+                onPress={() => onChange('auto')}
+                style={{ paddingHorizontal: 14, height: 34, borderRadius: 17, justifyContent: 'center', backgroundColor: auto ? c.brand : c.surface, borderWidth: 1, borderColor: auto ? c.brand : c.border }}
+            >
+                <Text variant="text-sm/semibold" style={{ color: auto ? '#ffffff' : c.text }}>
+                    Auto
+                </Text>
+            </Pressable>
+            <View style={{ gap: 4, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: c.border }}>
+                {ORIGIN_ROWS.map((row, i) => (
+                    <View key={i} style={{ flexDirection: 'row', gap: 4 }}>
+                        {row.map(id => {
+                            const on = id === value
+                            return (
+                                <Pressable
+                                    key={id}
+                                    onPress={() => onChange(id)}
+                                    style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: on ? c.brand : c.surface, borderWidth: 1, borderColor: on ? c.brand : c.border }}
+                                />
+                            )
+                        })}
+                    </View>
+                ))}
+            </View>
+        </View>
     )
 }
 
@@ -297,7 +338,6 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
     return (
         <View style={{ borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: open ? c.brandSoft : c.border, overflow: 'hidden', opacity: enabled ? 1 : 0.55 }}>
             <Pressable onPress={onToggle} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: value.effect === 'default' ? c.muted : c.brand }} />
                 <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="text-md/semibold">{info.title}</Text>
                     <Text variant="text-xs/medium" color="text-muted">
@@ -356,7 +396,7 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                     )}
                     {info.move && (custom || mediaExit) && (
                         <Field label="Origin">
-                            <Chips items={POSITIONS} value={value.position ?? 'auto'} onChange={position => set({ position })} />
+                            <OriginPicker value={value.position ?? 'auto'} onChange={position => set({ position })} />
                         </Field>
                     )}
                     {id === 'lists' && custom && (

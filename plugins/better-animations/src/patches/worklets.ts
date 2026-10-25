@@ -155,7 +155,13 @@ const MEDIA =
     'function BetterAnimationsMediaItem(){var c=this.__closure;var BA=c.BA;var k=c.entranceAnimationDriver.get();' +
     'var cl=c.BA_closing?c.BA_closing.get():0;' +
     'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
-    'if(cl?BA.zoomExit:BA.zoom){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
+    'var mode=cl?BA.modeExit:BA.mode;' +
+    // 부드럽게 커지기: 크기·위치는 처음부터 원래대로 두고 변형(transform)만 움직인다 (매 프레임 다시 배치하지 않아 매끄럽다)
+    'if(mode===2){var sw=c.sourceWidth,sh=c.sourceHeight;var s0=Math.max(c.startWidth/sw,c.startHeight/sh)*c.startScale;var u=1-k;' +
+    'var dx=c.startTranslateX+c.startWidth/2-sw/2;var dy=c.startTranslateY+c.startHeight/2-sh/2;var s=s0+(1-s0)*k;' +
+    'var br=u>0?Math.min(48,12*u/Math.max(s,0.05)):0;' +
+    'return{height:sh,width:sw,top:0,left:0,borderRadius:br,transform:[{translateX:dx*u},{translateY:dy*u},{scale:s}]};}' +
+    'if(mode===1){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
     'var q=1-k;var h=cl?BA.exit:BA.hidden;' +
     'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
     "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
@@ -287,8 +293,9 @@ function mediaConfig(m: ModuleSettings) {
     ba = {
         hidden,
         exit: e ? applyMove(e.hidden, move, W.width, W.height) : hidden,
-        zoom: !enterCustom || m.effect === 'zoom',
-        zoomExit: e?.id === 'zoom',
+        // 1 = 디스코드처럼 누른 자리에서 (크기를 바꿔 가며), 2 = 부드럽게 커지기, 0 = 효과
+        mode: !enterCustom || m.effect === 'zoom' ? 1 : m.effect === 'grow' ? 2 : 0,
+        modeExit: e?.id === 'zoom' ? 1 : e?.id === 'grow' ? 2 : 0,
         W: W.width,
         H: W.height,
     }

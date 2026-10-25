@@ -278,6 +278,7 @@ export const FOLDER_EFFECTS: Effect[] = [
 export const MEDIA_EFFECTS: Effect[] = [
     { id: 'default', label: 'Default' },
     { id: 'zoom', label: 'Zoom', hidden: { s: 0.3 } },
+    { id: 'grow', label: 'Smooth zoom', hidden: { s: 0.3 } },
     { id: 'fade', label: 'Fade', hidden: { o: 0 } },
     { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.9 } },
     { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
