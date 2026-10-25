@@ -115,7 +115,13 @@ export function patchChannelRows(cleanup: (...fns: Array<() => unknown>) => void
                         try {
                             if (!el || !active('channelList')) return el
                             const a = args[0]
-                            const ch = a?.guildChannels?.getChannelFromSectionRow?.(a.section, a.row)?.channel?.record
+                            let ch: any
+                            try {
+                                ch = a?.guildChannels?.getChannelFromSectionRow?.(a.section, a.row)?.channel?.record
+                            } catch {
+                                // 채널이 아닌 줄 (이벤트·부스트 같은 서버 메뉴 줄)
+                                return el
+                            }
                             if (!ch?.id) return el
                             return createElement(
                                 ChannelRow,

@@ -31,7 +31,7 @@ import kotlin.coroutines.resume
 import org.json.JSONObject
 import java.io.File
 import java.lang.ref.WeakReference
-import java.lang.reflect.Method
+import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.PI
@@ -58,9 +58,6 @@ import kotlin.math.sqrt
  * 설정을 바꾸면 JS 가 `<id>.reload` 를 부른다.
  */
 
-private const val RECYCLER_VIEW = "androidx.recyclerview.widget.RecyclerView"
-private const val VIEW_HOLDER = "androidx.recyclerview.widget.RecyclerView\$ViewHolder"
-private const val CHAT_LIST_VIEW = "com.discord.chat.presentation.list.ChatListView"
 
 /** 한 번에 이보다 많이 붙으면 채널을 연(또는 크게 새로 그린) 것으로 본다 */
 private const val OPEN_BATCH = 6
@@ -629,7 +626,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         if (layingOut === parent && holderOf(parent, child)) {
             removedInPass++
             val c = config()
-            if (c.exitOn && snapshots.size < 4 && child.isLaidOut && child.bottom > 0 && child.top < parent.height) {
+            if (c.exitOn && snapshots.size < 4 && child.width > 0 && child.bottom > 0 && child.top < parent.height) {
                 try {
                     Snapshot.of(child)?.let(snapshots::add)
                 } catch (e: Throwable) {
@@ -674,132 +671,159 @@ val betterAnimationsPlugin = plugin {
         // 설정은 JS 쪽 스레드에서 다시 읽고, 메인 스레드에서 쓴다
         val config = AtomicReference(loadConfig(storageDir))
 
-        val recyclerView = XposedHelpers.findClass(RECYCLER_VIEW, classLoader)
-        val chatListView = XposedHelpers.findClass(CHAT_LIST_VIEW, classLoader)
-        val getHolder: Method = recyclerView.getMethod("getChildViewHolder", View::class.java)
-        val isRemoved: Method? = try {
-            XposedHelpers.findClass(VIEW_HOLDER, classLoader).getDeclaredMethod("isRemoved").apply { isAccessible = true }
+        // 하나를 못 찾아도 나머지는 돈다 (디스코드 버전마다 안쪽 이름이 바뀔 수 있다)
+        val recycler = try {
+            Recycler(classLoader)
         } catch (e: Throwable) {
-            log.w("ViewHolder.isRemoved not found; exit animations disabled")
+            log.e("RecyclerView not found; list animations disabled", e)
             null
         }
-        val removedHolder = { parent: ViewGroup, child: View ->
-            try {
-                val holder = getHolder.invoke(parent, child)
-                holder != null && isRemoved?.invoke(holder) == true
-            } catch (e: Throwable) {
-                false
-            }
-        }
+        MediaSiblings.recycler = recycler
+        val chatListView = findChatListClass(classLoader)
+        if (recycler != null) log.i("RecyclerView: ${recycler.describe()} chat=${chatListView?.name}")
+        if (chatListView == null) log.w("Chat list not found; message animations disabled")
+        if (recycler != null && !recycler.canTellRemoved) log.w("ViewHolder position not found; exit animations disabled")
+        val removedHolder = { parent: ViewGroup, child: View -> recycler?.isRemoved(parent, child) == true }
         val rows = Rows({ config.get() }, removedHolder)
 
-        fun chat(param: XC_MethodHook.MethodHookParam): ViewGroup? =
-            param.thisObject.takeIf { chatListView.isInstance(it) } as? ViewGroup
+        fun chat(list: Any?): ViewGroup? =
+            if (chatListView != null && chatListView.isInstance(list)) list as? ViewGroup else null
 
         // 채팅 말고 다른 네이티브 목록 (Cask 효과)
         val listsConfig = AtomicReference(loadListsConfig(storageDir))
         val lists = ListRows { listsConfig.get() }
-        val getScrollState: Method? = try {
-            recyclerView.getMethod("getScrollState")
-        } catch (e: Throwable) {
-            null
-        }
-        fun otherList(param: XC_MethodHook.MethodHookParam): ViewGroup? {
-            val v = param.thisObject as? ViewGroup ?: return null
-            if (chatListView.isInstance(v) || v.javaClass.name.contains("MessageAccessories")) return null
+        fun otherList(list: Any?): ViewGroup? {
+            val v = list as? ViewGroup ?: return null
+            if (chat(v) != null || v.javaClass.name.contains("MessageAccessories")) return null
             return v
         }
 
-        unhooks = listOf(
-            XposedHelpers.findAndHookMethod(
-                recyclerView,
-                "dispatchChildAttached",
-                View::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val child = param.args[0] as? View ?: return
-                        val parent = chat(param)
-                        if (parent == null) {
+        val hooks = ArrayList<XC_MethodHook.Unhook>()
+        fun tryHook(what: String, f: () -> XC_MethodHook.Unhook) {
+            try {
+                hooks.add(f())
+            } catch (e: Throwable) {
+                log.e("Failed to hook $what", e)
+            }
+        }
+
+        if (recycler != null) {
+            val rvClass = recycler.rv
+            // 줄이 붙고 떨어지는 건 ViewGroup 의 OnHierarchyChangeListener 로 듣는다.
+            // (RecyclerView 의 dispatchChildAttached/Detached 는 버전마다 이름이 줄여지거나 다른 곳에 녹아 들어가지만,
+            //  줄을 붙이고 떼는 건 늘 ViewGroup.addView/removeViewAt 라 이 리스너는 그대로 불린다)
+            val installed = Collections.newSetFromMap(WeakHashMap<ViewGroup, Boolean>())
+            fun install(list: ViewGroup) {
+                if (!installed.add(list)) return
+                val prev = try {
+                    XposedHelpers.getObjectField(list, "mOnHierarchyChangeListener") as? ViewGroup.OnHierarchyChangeListener
+                } catch (e: Throwable) {
+                    null
+                }
+                list.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+                    override fun onChildViewAdded(parent: View, child: View) {
+                        prev?.onChildViewAdded(parent, child)
+                        val p = chat(list)
+                        if (p == null) {
                             if (listsConfig.get() == null) return
-                            val list = otherList(param) ?: return
+                            val other = otherList(list) ?: return
                             try {
-                                val scrolling = (getScrollState?.invoke(list) as? Int ?: 0) != 0
-                                lists.onAttached(list, child, scrolling)
+                                lists.onAttached(other, child, recycler.scrollState(other) != 0)
                             } catch (e: Throwable) {
                                 log.e("Failed to animate list row", e)
                             }
                             return
                         }
                         try {
-                            rows.onAttached(parent, child)
+                            rows.onAttached(p, child)
                         } catch (e: Throwable) {
                             log.e("Failed to animate row", e)
                         }
                     }
-                },
-            ),
-            XposedHelpers.findAndHookMethod(
-                recyclerView,
-                "dispatchChildDetached",
-                View::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val child = param.args[0] as? View ?: return
-                        val parent = chat(param)
-                        if (parent == null) {
-                            if (otherList(param) != null) lists.reset(child)
+
+                    override fun onChildViewRemoved(parent: View, child: View) {
+                        prev?.onChildViewRemoved(parent, child)
+                        val p = chat(list)
+                        if (p == null) {
+                            if (otherList(list) != null) lists.reset(child)
                             return
                         }
                         try {
-                            rows.onDetached(parent, child)
+                            rows.onDetached(p, child)
                         } catch (e: Throwable) {
                             log.e("Failed to handle removed row", e)
                         }
                     }
-                },
-            ),
-            XposedHelpers.findAndHookMethod(
-                recyclerView,
-                "onLayout",
-                java.lang.Boolean.TYPE,
-                Integer.TYPE,
-                Integer.TYPE,
-                Integer.TYPE,
-                Integer.TYPE,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val parent = chat(param) ?: return
-                        try {
-                            rows.beforeLayout(parent)
-                        } catch (e: Throwable) {
-                            log.e("Failed before layout", e)
+                })
+            }
+            // 처음 재거나 배치할 때(줄을 붙이기 전) 리스너를 단다. 레이아웃 전후 기록도 여기서
+            tryHook("onMeasure") {
+                XposedHelpers.findAndHookMethod(
+                    rvClass,
+                    "onMeasure",
+                    Integer.TYPE,
+                    Integer.TYPE,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val list = param.thisObject as? ViewGroup ?: return
+                            try {
+                                install(list)
+                            } catch (e: Throwable) {
+                                log.e("Failed to watch list", e)
+                            }
                         }
-                    }
+                    },
+                )
+            }
+            tryHook("onLayout") {
+                XposedHelpers.findAndHookMethod(
+                    rvClass,
+                    "onLayout",
+                    java.lang.Boolean.TYPE,
+                    Integer.TYPE,
+                    Integer.TYPE,
+                    Integer.TYPE,
+                    Integer.TYPE,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val list = param.thisObject as? ViewGroup ?: return
+                            try {
+                                install(list)
+                            } catch (e: Throwable) {
+                                log.e("Failed to watch list", e)
+                            }
+                            val parent = chat(list) ?: return
+                            try {
+                                rows.beforeLayout(parent)
+                            } catch (e: Throwable) {
+                                log.e("Failed before layout", e)
+                            }
+                        }
 
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val parent = chat(param) ?: return
-                        try {
-                            rows.afterLayout(parent)
-                        } catch (e: Throwable) {
-                            log.e("Failed after layout", e)
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val parent = chat(param.thisObject) ?: return
+                            try {
+                                rows.afterLayout(parent)
+                            } catch (e: Throwable) {
+                                log.e("Failed after layout", e)
+                            }
                         }
-                    }
-                },
-            ),
-        )
+                    },
+                )
+            }
+        }
+        unhooks = hooks.toList()
 
         // 큰 화면 전환
         val stack = AtomicReference(loadStackConfig(storageDir))
-        val appContext = AtomicReference<android.content.Context?>(null)
-        withAppContext { appContext.set(it.applicationContext ?: it) }
-        val screens = ScreenTransitions(classLoader, { appContext.get() }, { stack.get() })
+        val screens = ScreenTransitions { stack.get() }
         val screenHook = try {
             screens.hook()
         } catch (e: Throwable) {
             log.e("Failed to hook screen transitions", e)
             null
         }
-        if (screenHook != null) unhooks = unhooks + screenHook else log.w("Screen fragment not found; screen transitions stay in JS")
+        if (screenHook != null) unhooks = unhooks + screenHook else log.w("Screen transitions stay in JS")
 
         // JS 설정 화면이 저장한 뒤 부른다
         registerNativeMethod("${manifest.id}.reload") {
@@ -870,7 +894,7 @@ val betterAnimationsPlugin = plugin {
             mapOf("pong" to true, "screens" to (screenHook != null), "played" to screens.played)
         }
 
-        log.i("Hooked chat list (effect=${config.get().effect}, exit=${config.get().exitEffect})")
+        log.i("Ready (chat=${chatListView != null}, hooks=${unhooks.size}, effect=${config.get().effect})")
     }
 
     stop {
