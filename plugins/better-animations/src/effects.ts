@@ -54,11 +54,15 @@ export interface Effect {
     dim?: number
     /** 뒤로 가기 스와이프 방향 */
     gesture?: 'horizontal' | 'vertical'
+    /** "나갈 때 같게"면 들어온 반대쪽으로 지나가며 나감 (아래에서 들어오면 위로 나감) */
+    through?: boolean
 }
 
 export const DEFAULT_ID = 'default'
 /** "나갈 때"에서 나타날 때와 같은 효과 */
 export const SAME_ID = 'same'
+/** "나갈 때"에서 들어온 반대쪽으로 지나가기 */
+export const THROUGH_ID = 'through'
 
 export const NORMAL: Required<Omit<Hidden, 'anchor' | 'edge'>> = { o: 1, tx: 0, ty: 0, txW: 0, tyH: 0, s: 1, sy: 1, r: 0, rx: 0, ry: 0 }
 
@@ -243,6 +247,7 @@ export const CHANNEL_LIST_EFFECTS: Effect[] = [
 // ── 서버 바꾸기 (서버를 누르면 채널 목록이 바뀔 때) ────────────────────────
 export const SERVER_EFFECTS: Effect[] = [
     { id: 'default', label: '기본 (바로)' },
+    { id: 'rise', label: '올라가며 바뀌기', hidden: { o: 0, ty: 36 }, through: true },
     { id: 'slip', label: '슬립', hidden: { o: 0, ty: 28 } },
     { id: 'fade', label: '페이드', hidden: { o: 0 } },
     { id: 'scale', label: '확대', hidden: { o: 0, s: 0.92 } },
@@ -297,7 +302,23 @@ export const effectOf = (module: ModuleKey, id: string): Effect => EFFECTS[modul
 
 /** 나갈 때 효과로 고를 수 있는 것: "같게" + 기본·없음을 뺀 효과들 */
 export function exitChoices(module: ModuleKey): Effect[] {
-    return [{ id: SAME_ID, label: '나타날 때와 같게' }, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
+    const through = THROUGH_MODULES.has(module) ? [{ id: THROUGH_ID, label: '반대쪽으로 지나가기' }] : []
+    return [{ id: SAME_ID, label: '나타날 때와 같게' }, ...through, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
+}
+
+/** "반대쪽으로 지나가기"를 고를 수 있는 곳 (옛 것과 새 것이 같이 보이는 곳) */
+const THROUGH_MODULES = new Set<ModuleKey>(['servers'])
+
+/** 들어온 반대쪽 (이동·회전 부호만 바꿈) */
+export function mirror(h: Normalized): Normalized {
+    return { ...h, tx: -h.tx, ty: -h.ty, txW: -h.txW, tyH: -h.tyH, r: -h.r, rx: -h.rx, ry: -h.ry }
+}
+
+/** 나갈 때 모습 (방향·위치까지 푼 것) */
+export function exitPoseOf(module: ModuleKey, enter: string, exit: string | undefined, move: MoveOptions | undefined, W: number, H: number): Normalized {
+    const e = effectOf(module, enter)
+    if (exit === THROUGH_ID || ((!exit || exit === SAME_ID) && e.through)) return mirror(applyMove(e.hidden, move, W, H))
+    return applyMove(exitEffectOf(module, enter, exit).hidden, move, W, H)
 }
 
 /** 나갈 때 쓸 효과. "같게"이거나 모르는 값이면 나타날 때 효과 */

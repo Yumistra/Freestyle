@@ -98,32 +98,36 @@ internal class PoseAnimation(private val from: Pose, private val to: Pose, priva
     override fun willChangeBounds() = true
 
     override fun applyTransformation(t: Float, tr: Transformation) {
-        fun l(a: Float, b: Float) = a + (b - a) * t
-        tr.alpha = l(from.o, to.o).coerceIn(0f, 1f)
-        val tx = l(from.tx + from.txW * w, to.tx + to.txW * w)
-        val ty = l(from.ty + from.tyH * h, to.ty + to.tyH * h)
-        val s = l(from.s, to.s)
-        val sy = l(from.s * from.sy, to.s * to.sy)
-        val r = l(from.r, to.r)
-        val rx = l(from.rx, to.rx)
-        val ry = l(from.ry, to.ry)
-        val px = w * pivot.first
-        val py = h * pivot.second
-        val m = tr.matrix
-        m.reset()
-        if (rx != 0f || ry != 0f) {
-            camera.save()
-            camera.rotateX(-rx)
-            camera.rotateY(ry)
-            camera.getMatrix(m)
-            camera.restore()
-            m.preTranslate(-px, -py)
-            m.postTranslate(px, py)
-        }
-        if (r != 0f) m.postRotate(r, px, py)
-        m.postScale(s, sy, px, py)
-        m.postTranslate(tx, ty)
+        tr.alpha = poseMatrix(from, to, t, w, h, pivot, camera, tr.matrix)
     }
+}
+
+/** from → to 의 t 지점 모습을 행렬에 넣고 투명도를 돌려준다 (크기 w×h, 기준점은 비율) */
+internal fun poseMatrix(from: Pose, to: Pose, t: Float, w: Float, h: Float, pivot: Pair<Float, Float>, camera: Camera, m: android.graphics.Matrix): Float {
+    fun l(a: Float, b: Float) = a + (b - a) * t
+    val tx = l(from.tx + from.txW * w, to.tx + to.txW * w)
+    val ty = l(from.ty + from.tyH * h, to.ty + to.tyH * h)
+    val s = l(from.s, to.s)
+    val sy = l(from.s * from.sy, to.s * to.sy)
+    val r = l(from.r, to.r)
+    val rx = l(from.rx, to.rx)
+    val ry = l(from.ry, to.ry)
+    val px = w * pivot.first
+    val py = h * pivot.second
+    m.reset()
+    if (rx != 0f || ry != 0f) {
+        camera.save()
+        camera.rotateX(-rx)
+        camera.rotateY(ry)
+        camera.getMatrix(m)
+        camera.restore()
+        m.preTranslate(-px, -py)
+        m.postTranslate(px, py)
+    }
+    if (r != 0f) m.postRotate(r, px, py)
+    m.postScale(s, sy, px, py)
+    m.postTranslate(tx, ty)
+    return l(from.o, to.o).coerceIn(0f, 1f)
 }
 
 /** RNS 의 ScreenStackFragment 클래스 (이름이 줄여져 있을 수 있어 찾아본다) */

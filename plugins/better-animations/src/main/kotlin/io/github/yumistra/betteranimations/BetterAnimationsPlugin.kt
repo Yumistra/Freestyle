@@ -21,7 +21,13 @@ import android.view.ViewGroup
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import io.github.revenge.plugins.plugin
+import io.github.revenge.xposed.api.registerNativeAsyncMethod
 import io.github.revenge.xposed.api.registerNativeMethod
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import org.json.JSONObject
 import java.io.File
 import java.lang.ref.WeakReference
@@ -801,6 +807,25 @@ val betterAnimationsPlugin = plugin {
             stack.set(loadStackConfig(storageDir))
             listsConfig.set(loadListsConfig(storageDir))
             true
+        }
+        // 서버 바꾸기: 옛 목록을 찍어 덮고 나가는 효과로 치운다 (덮은 뒤에 돌아감)
+        registerNativeAsyncMethod("${manifest.id}.guildOut") { args ->
+            val opts = try {
+                JSONObject(args.getOrNull(0) as? String ?: "{}")
+            } catch (e: Throwable) {
+                JSONObject()
+            }
+            val activity = withTimeoutOrNull(100L) {
+                suspendCancellableCoroutine<android.app.Activity> { cont -> withAppActivity { if (cont.isActive) cont.resume(it) } }
+            } ?: return@registerNativeAsyncMethod "noactivity"
+            withContext(Dispatchers.Main) {
+                try {
+                    GuildOut.play(activity, opts)
+                } catch (e: Throwable) {
+                    log.e("Failed to play server switch", e)
+                    "error"
+                }
+            }
         }
         // JS 쪽에서 네이티브 부분이 실렸는지, 화면 전환을 맡을 수 있는지 확인할 때
         registerNativeMethod("${manifest.id}.ping") {

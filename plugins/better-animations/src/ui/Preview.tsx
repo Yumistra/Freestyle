@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Easing, View } from 'react-native'
-import { applyMove, caskStyleOf, DEFAULT_PREVIEW, easingFrom, effectOf, exitEffectOf, springFor, type EasingKey, type ModuleKey, type Normalized } from '../effects'
+import { applyMove, caskStyleOf, DEFAULT_PREVIEW, easingFrom, effectOf, exitEffectOf, exitPoseOf, springFor, type EasingKey, type ModuleKey, type Normalized } from '../effects'
 import { makeCardInterpolator, partsFor } from '../interpolate'
 import { caskRun, caskVisual, randomColor } from '../patches/lists'
 import type { ModuleSettings } from '../settings'
@@ -201,8 +201,12 @@ function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: Modu
     const { p } = useLoop(s.duration, s.easing, instant, false)
     if (module === 'servers') {
         const a = p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
-        const h = applyMove(effectOf('servers', instant ? 'fade' : s.effect).hidden, { direction: s.direction, position: s.position }, 220, HEIGHT)
+        const move = { direction: s.direction, position: s.position }
+        const h = applyMove(effectOf('servers', instant ? 'fade' : s.effect).hidden, move, 220, HEIGHT)
         const enter = instant ? { opacity: p.interpolate({ inputRange: [0, 0.5, 0.51, 1], outputRange: [0, 0, 1, 1] }) } : moving(p, undefined, h, h, 220, HEIGHT)
+        // 옛 목록: 원래 모습 → 나가는 모습
+        const hx = exitPoseOf('servers', instant ? 'fade' : s.effect, s.exit, move, 220, HEIGHT)
+        const leave = instant ? { opacity: a.interpolate({ inputRange: [0, 0.99, 1], outputRange: [0, 0, 1] }) } : moving(a, undefined, hx, hx, 220, HEIGHT)
         return (
             <View style={{ ...fill, flexDirection: 'row', padding: 12, gap: 12 }}>
                 <View style={{ width: 40, gap: 8 }}>
@@ -210,7 +214,7 @@ function ListPreview({ module, s }: { module: 'channelList' | 'servers'; s: Modu
                     <Animated.View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: lerp(p, 0, 1).interpolate({ inputRange: [0, 1], outputRange: [c.raised, c.brand] }) }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Animated.View style={[fill, { opacity: a.interpolate({ inputRange: [0, 0.99, 1], outputRange: [0, 0, 1] }) }]}>
+                    <Animated.View style={[fill, leave]}>
                         <Bars color={c.muted} widths={['50%', '80%', '65%', '72%', '40%']} gap={12} />
                     </Animated.View>
                     <Animated.View style={[fill, enter]}>
