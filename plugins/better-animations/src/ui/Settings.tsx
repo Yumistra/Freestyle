@@ -83,6 +83,7 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         easings: ['smooth', 'spring', 'back', 'bounce', 'elastic'],
     },
     media: { title: 'Media', exit: true, move: true },
+    press: { title: 'Buttons', easings: ['spring', 'out', 'smooth', 'back', 'bounce', 'elastic'] },
     sheet: { title: 'Sheets' },
     menu: { title: 'Menus', exit: true, move: true },
     alert: {
@@ -480,7 +481,7 @@ const SECTIONS: Array<[string, ModuleKey[]]> = [
     ['Screens', ['stack', 'push', 'modal', 'panel']],
     ['Lists', ['lists', 'channelList', 'servers', 'folder']],
     ['Popups', ['sheet', 'menu', 'alert', 'backdrop', 'toast', 'notice']],
-    ['Other', ['subtle']],
+    ['Other', ['press', 'subtle']],
 ]
 
 function StatusRows() {
@@ -507,6 +508,7 @@ function StatusRows() {
         ['Notifications', `${status.notices}`],
         ['Media', `${ok(f.media)} · ${status.media}`],
         ['Folders', `${status.folders}`],
+        ['Buttons', `${status.presses}`],
         ['Lists', `${Object.keys(f).filter(k => k.startsWith('list:')).map(k => k.slice(5)).join(', ') || 'missing'} · ${status.listCells}`],
         ['Channel list', `${ok(f.layout)} · ${ok(f.channelRows)} · ${ok(f.servers)} · ${status.layouts}`],
         ['Constants', status.constants.length ? status.constants.join(', ') : 'missing'],

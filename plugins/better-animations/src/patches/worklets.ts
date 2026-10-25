@@ -195,11 +195,22 @@ const MEDIA =
     'var o=h.o+(1-h.o)*k;' +
     'return{height:sh,width:sw,top:0,left:0,borderRadius:0,opacity:o<0?0:o>1?1:o,transform:t};}'
 
-export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE, MEDIA }
+// 버튼 누르기: 디스코드는 pressed(0/1)에 따라 몇 px 작아지게 스프링으로 움직인다 (useButtonScaleStyles).
+// 같은 pressed 로 우리 효과의 눌린 모습(hidden)과 원래 모습 사이를 움직인다
+const BUTTON =
+    'function BetterAnimationsButton(){var c=this.__closure;' +
+    HELPERS +
+    'var on=c.pressed.get()>0;var h=H0;' +
+    'var t=[{perspective:600},{translateX:go(on?h.tx:0)},{translateY:go(on?h.ty:0)},{scale:go(on?h.s:1)},{scaleY:go(on?h.sy:1)}];' +
+    "if(h.r){t.push({rotate:go(on?h.r+'deg':'0deg')});}" +
+    "if(h.rx){t.push({rotateX:go(on?h.rx+'deg':'0deg')});}" +
+    'var out={transform:t};if(h.o!==1){out.opacity=go(on?h.o:1);}return out;}'
+
+export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE, MEDIA, BUTTON }
 
 // ── 디스코드 워클릿 알아보기 ─────────────────────────────────────
 
-type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder' | 'notice' | 'media'
+type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder' | 'notice' | 'media' | 'button'
 
 const has = (c: object, ...keys: string[]) => keys.every(k => k in c)
 
@@ -215,12 +226,13 @@ export function kindOf(closure: any): Kind | undefined {
     if (has(closure, 'CONTEXT_MENU_SPRING', 'visible') && Object.keys(closure).length <= 4) return 'menuBackdrop'
     if (has(closure, 'FOLDER_SPRING_PHYSICS', 'fromTop', 'guildItemSize', 'visible', 'cleanUp')) return 'folder'
     if (has(closure, 'notificationGestureY', 'scale', 'initialized', 'PAN_INPUT_RANGE', 'extrapolateConfig', 'interpolate')) return 'notice'
+    if (has(closure, 'pressed', 'width', 'scaleAmountInPx', 'ON_PRESS_SPRING', 'withSpring', 'interpolate')) return 'button'
     if (has(closure, 'entranceAnimationDriver', 'startScale', 'startTranslateX', 'startTranslateY', 'sourceWidth', 'sourceHeight', 'interpolate')) return 'media'
 }
 
-const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder', notice: 'notice', media: 'media' }
-const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER, notice: NOTICE, media: MEDIA }
-const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders', notice: 'notices', media: 'media' }
+const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder', notice: 'notice', media: 'media', button: 'press' }
+const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER, notice: NOTICE, media: MEDIA, button: BUTTON }
+const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders', notice: 'notices', media: 'media', button: 'presses' }
 
 // ── 설정 → 워클릿에 넘길 값 ─────────────────────────────────────
 

@@ -24,6 +24,7 @@ export type ModuleKey =
     | 'notice'
     | 'subtle'
     | 'media'
+    | 'press'
 
 export interface Hidden {
     /** 투명도 */
@@ -295,6 +296,20 @@ export const SUBTLE_EFFECTS: Effect[] = [
     { id: 'custom', label: 'Custom', hidden: { o: 0, s: 0.5 } },
 ]
 
+// ── 버튼 누르기 (hidden = 누르고 있는 모습) ─────────────────────────────
+export const PRESS_EFFECTS: Effect[] = [
+    { id: 'default', label: 'Default' },
+    { id: 'shrink', label: 'Shrink', hidden: { s: 0.92 } },
+    { id: 'deep', label: 'Deep', hidden: { s: 0.82 } },
+    { id: 'grow', label: 'Grow', hidden: { s: 1.08 } },
+    { id: 'squish', label: 'Squish', hidden: { s: 1.06, sy: 0.84 } },
+    { id: 'sink', label: 'Sink', hidden: { ty: 3, s: 0.96 } },
+    { id: 'tilt', label: 'Tilt', hidden: { rx: 24, s: 0.96 } },
+    { id: 'wobble', label: 'Wobble', hidden: { r: -5, s: 0.94 } },
+    { id: 'dim', label: 'Dim', hidden: { o: 0.5 } },
+    { id: 'none', label: 'None' },
+]
+
 MESSAGE_EFFECTS.splice(MESSAGE_EFFECTS.length - 1, 0, ...caskEffects('Cask · '))
 
 export const EFFECTS: Record<ModuleKey, Effect[]> = {
@@ -306,6 +321,7 @@ export const EFFECTS: Record<ModuleKey, Effect[]> = {
     folder: FOLDER_EFFECTS,
     subtle: SUBTLE_EFFECTS,
     media: MEDIA_EFFECTS,
+    press: PRESS_EFFECTS,
     stack: STACK_EFFECTS,
     push: NATIVE_EFFECTS,
     modal: NATIVE_EFFECTS,
@@ -367,6 +383,7 @@ export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: numb
     folder: { effect: 'drop', duration: 350, easing: 'smooth' },
     subtle: { effect: 'custom', duration: 220, easing: 'smooth' },
     media: { effect: 'zoom', duration: 300, easing: 'out' },
+    press: { effect: 'shrink', duration: 250, easing: 'spring' },
 }
 
 // ── 방향 · 위치 (BetterDiscord 의 Direction / Position) ─────────────────

@@ -303,6 +303,16 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
                 ))}
             </View>
         )
+    } else if (module === 'press') {
+        // 버튼: 눌린 모습 ↔ 원래 모습
+        const [h] = hFor(140, 40)
+        const style = moving(p, closing, h, h, W, HEIGHT)
+        body = (
+            <View style={{ ...fill, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 16 }}>
+                <Animated.View style={[{ width: 140, height: 40, borderRadius: 12, backgroundColor: c.brand }, style]} />
+                <Animated.View style={[{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.raised }, style]} />
+            </View>
+        )
     } else if (module === 'subtle') {
         // 체크박스·라디오·스위치
         const [h] = hFor(30, 30)

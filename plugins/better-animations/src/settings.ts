@@ -49,6 +49,7 @@ export const MODULE_KEYS: ModuleKey[] = [
     'toast',
     'notice',
     'subtle',
+    'press',
     'media',
 ]
 
@@ -71,6 +72,7 @@ export const DEFAULTS: Settings = {
         toast: { effect: 'slide', duration: 380, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },
         notice: { effect: 'default', duration: 300, easing: 'out', direction: 'auto', position: 'auto' },
         subtle: { effect: 'default', duration: 260, easing: 'spring' },
+        press: { effect: 'default', duration: 260, easing: 'spring' },
         media: { effect: 'default', duration: 320, easing: 'out', exit: 'default', direction: 'auto', position: 'auto' },
     },
 }
@@ -185,6 +187,7 @@ export const status = {
     toasts: 0,
     notices: 0,
     media: 0,
+    presses: 0,
     folders: 0,
     layouts: 0,
     listCells: 0,
