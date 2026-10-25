@@ -3,6 +3,7 @@ import { withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { Dimensions } from 'react-native'
 import { applyMove, easingFrom, effectOf, exitEffectOf, springFor, type Effect, type ModuleKey } from '../effects'
+import { nativeMediaUnwind } from '../native'
 import { active, report, settings, status, version, type ModuleSettings } from '../settings'
 
 /**
@@ -485,6 +486,7 @@ export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void
                                     const easing = reaEasing(m.easing === 'spring' ? 'back' : m.easing)
                                     setShared(closing, 1)
                                     setShared(lastDriver, discordTiming(0, { duration: m.duration, ...(easing ? { easing } : {}) }, args[2] ?? 'respect-motion-settings', cb))
+                                    nativeMediaUnwind({ duration: m.duration, easing: m.easing })
                                     status.media++
                                     // 끌어 놓은 자리는 가운데로 돌아오게 (닫기 콜백은 위에서)
                                     return orig.apply(this, [0, args[1], args[2]])

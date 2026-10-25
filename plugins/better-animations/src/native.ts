@@ -76,3 +76,9 @@ export function nativeGuildOut(opts: unknown): Promise<string> {
         () => 'error',
     )
 }
+
+/** 사진·동영상 닫기: 다른 플러그인이 사진에 건 회전·확대를 같은 시간·곡선으로 되돌린다 */
+export function nativeMediaUnwind(opts: { duration: number; easing: string }) {
+    if (status.native !== true) return
+    call('mediaUnwind', [JSON.stringify(opts)]).catch(() => {})
+}

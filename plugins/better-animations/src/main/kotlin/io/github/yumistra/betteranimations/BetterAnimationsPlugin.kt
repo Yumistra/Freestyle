@@ -827,6 +827,25 @@ val betterAnimationsPlugin = plugin {
                 }
             }
         }
+        // 사진·동영상 닫기: 다른 플러그인이 건 회전·확대를 같이 되돌린다
+        registerNativeAsyncMethod("${manifest.id}.mediaUnwind") { args ->
+            val opts = try {
+                JSONObject(args.getOrNull(0) as? String ?: "{}")
+            } catch (e: Throwable) {
+                JSONObject()
+            }
+            val activity = withTimeoutOrNull(100L) {
+                suspendCancellableCoroutine<android.app.Activity> { cont -> withAppActivity { if (cont.isActive) cont.resume(it) } }
+            } ?: return@registerNativeAsyncMethod 0
+            withContext(Dispatchers.Main) {
+                try {
+                    MediaUnwind.run(activity, opts.optLong("duration", 300L), opts.optString("easing", "out"))
+                } catch (e: Throwable) {
+                    log.e("Failed to unwind media", e)
+                    0
+                }
+            }
+        }
         // JS 쪽에서 네이티브 부분이 실렸는지, 화면 전환을 맡을 수 있는지 확인할 때
         registerNativeMethod("${manifest.id}.ping") {
             mapOf("pong" to true, "screens" to (screenHook != null), "played" to screens.played)
