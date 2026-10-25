@@ -70,15 +70,24 @@ export interface RestoreResult {
 
 export const messageOf = (e: unknown) => String((e as any)?.message ?? e)
 
-/** Revenge 내부 API. 없으면(숨김 API 꺼짐 등) 알기 쉬운 오류를 낸다 */
-function internal(): any {
-    let api: any
+/** Revenge 내부 API 를 열어 주는 내장 플러그인 (Revenge 플러그인 목록의 "Developer Mode") */
+export const DEV_MODE_NOTICE = 'Turn on "Developer Mode" in Revenge → Plugins, then restart Discord.'
+
+function tryInternal(): any {
     try {
-        api = Internal
+        const api: any = Internal
         // 저장소 API도 같이 확인
-        if (typeof (Repos as any).listRepos !== 'function') api = undefined
+        if (api?.pList && typeof (Repos as any).listRepos === 'function') return api
     } catch {}
-    if (!api?.pList) throw new Error('Revenge plugin API (revenge.hidden) not found')
+}
+
+/** 백업·복원에 필요한 Revenge 내부 API 를 쓸 수 있는지 (Developer Mode 가 꺼져 있으면 없다) */
+export const hasInternalApi = () => !!tryInternal()
+
+/** Revenge 내부 API. 없으면 켜는 방법을 알려 주는 오류를 낸다 */
+function internal(): any {
+    const api = tryInternal()
+    if (!api) throw new Error(DEV_MODE_NOTICE)
     return api
 }
 

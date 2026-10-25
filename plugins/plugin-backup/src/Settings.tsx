@@ -17,6 +17,8 @@ import {
     type Backup,
     type RestoreOptions,
     type RestoreResult,
+    DEV_MODE_NOTICE,
+    hasInternalApi,
 } from './backup'
 
 const MAX_BACKUPS = 10
@@ -156,6 +158,11 @@ export default function SettingsPage({ api }: { api: any }) {
     return (
         <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
             <Stack spacing={24} style={{ padding: 16, paddingBottom: 48 }}>
+                {!hasInternalApi() && (
+                    <Text variant="text-sm/semibold" style={{ color: '#f23f43' }}>
+                        {DEV_MODE_NOTICE}
+                    </Text>
+                )}
                 <Button text={busy || 'Back up now'} variant="primary" size="md" disabled={!!busy} onPress={backupNow} />
 
                 <TableRowGroup title="Backups">
