@@ -21,6 +21,8 @@ export interface ModuleSettings {
     always?: boolean
     /** 화면 전환: 설정 같은 모달 화면에도 */
     modals?: boolean
+    /** 서버 바꾸기: 서버 목록에서 위·아래 어느 쪽 서버로 가는지에 따라 세로 방향을 뒤집음 */
+    follow?: boolean
     /** 배경: 진하기 (0~1, 디스코드 기본 대비) */
     amount?: number
 }
@@ -59,7 +61,7 @@ export const DEFAULTS: Settings = {
         modal: { effect: 'default', duration: 300, easing: 'out' },
         panel: { effect: 'default', duration: 260, easing: 'expo' },
         channelList: { effect: 'default', duration: 200, easing: 'smooth' },
-        servers: { effect: 'default', duration: 260, easing: 'out', exit: 'same', direction: 'auto', position: 'auto' },
+        servers: { effect: 'default', duration: 260, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', follow: true },
         folder: { effect: 'drop', duration: 380, easing: 'spring', exit: 'same', direction: 'auto', position: 'auto' },
         sheet: { effect: 'default', duration: 380, easing: 'spring' },
         menu: { effect: 'pop', duration: 300, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },

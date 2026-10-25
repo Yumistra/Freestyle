@@ -5,7 +5,7 @@ import { instead } from '@revenge-mod/patcher'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
 import { createElement, useEffect, useRef, useState } from 'react'
 import { Animated, Dimensions, Easing, LayoutAnimation } from 'react-native'
-import { applyMove, decodeEasing, easingFrom, effectOf, exitPoseOf, isCustomEasing, springFor, zetaOf } from '../effects'
+import { applyMove, decodeEasing, easingFrom, effectOf, exitPoseOf, isCustomEasing, springFor, zetaOf, type Normalized } from '../effects'
 import { partsFor } from '../interpolate'
 import { nativeGuildOut } from '../native'
 import { hideCollapsing, markExpanded } from './channels'
@@ -61,8 +61,42 @@ interface Instance {
 const instances = new Set<Instance>()
 let instanceSeq = 0
 
+/**
+ * 이번 서버 바꾸기의 세로 방향. 1 = 위쪽 서버로 (위로 움직임: 옛 목록은 위로, 새 목록은 아래에서),
+ * -1 = 아래쪽 서버로 (아래로 움직임). 효과에 적힌 모습이 "위로"라서 -1 이면 세로만 뒤집는다
+ */
+let switchSign = 1
+
+/** 서버 목록에서의 순서 (DM = 맨 위) */
+function orderOf(id: string | null): number | undefined {
+    if (id === null) return -1
+    try {
+        const ids: string[] | undefined = (Stores as any).SortedGuildStore?.getFlattenedGuildIds?.()
+        const i = ids?.indexOf(id) ?? -1
+        return i >= 0 ? i : undefined
+    } catch {
+        return undefined
+    }
+}
+
+function signFor(from: string | null, to: string | null) {
+    const a = orderOf(from)
+    const b = orderOf(to)
+    if (a === undefined || b === undefined || a === b) return 1
+    return b < a ? 1 : -1
+}
+
+function vertical(h: Normalized, m: ModuleSettings): Normalized {
+    if (switchSign > 0 || m.follow === false) return h
+    return { ...h, ty: -h.ty, tyH: -h.tyH, rx: -h.rx }
+}
+
+function enterPose(m: ModuleSettings, W: number, H: number) {
+    return vertical(applyMove(effectOf('servers', m.effect).hidden, { direction: m.direction, position: m.position }, W, H), m)
+}
+
 function exitPose(m: ModuleSettings, W: number, H: number) {
-    return exitPoseOf('servers', m.effect, m.exit, { direction: m.direction, position: m.position }, W, H)
+    return vertical(exitPoseOf('servers', m.effect, m.exit, { direction: m.direction, position: m.position }, W, H), m)
 }
 
 function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; __kind: 'guild' | 'dm' }) {
@@ -70,6 +104,17 @@ function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; _
     const [busy, setBusy] = useState(false)
     const [nativeId] = useState(() => `better-animations-guild-${instanceSeq++}`)
     const last = useRef<string | null | undefined>(undefined)
+    const [run, setRun] = useState(0)
+    useEffect(() => {
+        if (!run) return
+        const m = active('servers')
+        if (!m || m.effect === 'none') {
+            value.setValue(1)
+            setBusy(false)
+            return
+        }
+        play(value, m, () => setBusy(false))
+    }, [run])
     useEffect(() => {
         const inst: Instance = { nativeId, kind: __kind }
         instances.add(inst)
@@ -81,8 +126,10 @@ function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; _
             seenGuild = g
             const m = active('servers')
             if (changed && m && m.effect !== 'none') {
+                // 새 방향으로 다시 그린 다음에 움직이기 시작한다 (그 전까지는 숨은 상태)
+                value.setValue(0)
                 setBusy(true)
-                play(value, m, () => setBusy(false))
+                setRun(n => n + 1)
             }
         }
         check()
@@ -97,8 +144,7 @@ function GuildSwitch({ __type, __props, __kind }: { __type: any; __props: any; _
     let style: any = { flex: 1 }
     if (m && m.effect !== 'none') {
         const { width, height } = Dimensions.get('window')
-        const move = { direction: m.direction, position: m.position }
-        const h = applyMove(effectOf('servers', m.effect).hidden, move, width, height)
+        const h = enterPose(m, width, height)
         const parts = partsFor(value, h, width, height, undefined)
         style = [{ flex: 1 }, { transform: parts.transform, ...(parts.opacity ? { opacity: parts.opacity } : {}) }]
     }
@@ -113,7 +159,9 @@ function guildOut(action: any) {
     if ((type !== 'CHANNEL_SELECT' && type !== 'GUILD_SELECT') || !action || !('guildId' in action)) return
     const next = action.guildId ?? null
     const cur = currentGuild()
-    if (cur === undefined || next === cur || !instances.size) return
+    if (cur === undefined || next === cur) return
+    switchSign = signFor(cur, next)
+    if (!instances.size) return
     const m = active('servers')
     if (!m || m.effect === 'none') return
     const { width, height } = Dimensions.get('window')

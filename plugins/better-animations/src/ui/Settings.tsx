@@ -374,6 +374,9 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                     {id === 'lists' && custom && (
                         <SwitchRow label="처음 나타날 때도" subLabel="스크롤할 때뿐 아니라 목록이 처음 열릴 때도 (Cask 의 Fresh View)" value={!!value.always} onChange={always => set({ always })} />
                     )}
+                    {id === 'servers' && custom && (
+                        <SwitchRow label="서버 위치 따라 방향 바꾸기" subLabel="위쪽 서버로 가면 위로, 아래쪽 서버로 가면 아래로 움직여요" value={value.follow !== false} onChange={follow => set({ follow })} />
+                    )}
                     {id === 'stack' && custom && (
                         <SwitchRow label="모달 화면에도" subLabel="설정처럼 아래에서 올라오는 화면에도 이 효과를 써요" value={value.modals !== false} onChange={modals => set({ modals })} />
                     )}
