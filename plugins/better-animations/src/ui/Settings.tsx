@@ -22,7 +22,7 @@ import {
     type ModuleKey,
 } from '../effects'
 import { pingNative } from '../native'
-import { bindStorage, DEFAULTS, hasStorage, MODULE_KEYS, save, settings, status, type ModuleSettings, type Settings } from '../settings'
+import { bindStorage, DEFAULTS, hasStorage, save, settings, status, type ModuleSettings, type Settings } from '../settings'
 import { palette } from './colors'
 import Preview from './Preview'
 
@@ -345,13 +345,11 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
             <Pressable onPress={onToggle} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
                 <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="text-md/semibold">{info.title}</Text>
-                    <Text variant="text-xs/medium" color="text-muted">
+                    <Text variant="text-xs/medium" style={{ color: value.effect === 'default' ? c.muted : c.brand }}>
                         {summaryOf(id, value)}
                     </Text>
                 </View>
-                <Text variant="text-lg/bold" color="text-muted">
-                    {open ? '−' : '+'}
-                </Text>
+                <Chevron open={open} />
             </Pressable>
             {open && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 16, gap: 14 }}>
@@ -454,6 +452,37 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
     )
 }
 
+/** 펼침 표시 (› 를 돌려서) */
+function Chevron({ open }: { open: boolean }) {
+    const { Text } = D()
+    return (
+        <Text variant="text-lg/bold" color="text-muted" style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}>
+            ›
+        </Text>
+    )
+}
+
+/** 묶음 제목 */
+function Section({ title, children }: { title: string; children: any }) {
+    const { Text } = D()
+    return (
+        <View style={{ gap: 8 }}>
+            <Text variant="text-xs/bold" color="text-muted" style={{ marginLeft: 4, letterSpacing: 0.6 }}>
+                {title.toUpperCase()}
+            </Text>
+            <View style={{ gap: 8 }}>{children}</View>
+        </View>
+    )
+}
+
+const SECTIONS: Array<[string, ModuleKey[]]> = [
+    ['Chat', ['messages', 'media']],
+    ['Screens', ['stack', 'push', 'modal', 'panel']],
+    ['Lists', ['lists', 'channelList', 'servers', 'folder']],
+    ['Popups', ['sheet', 'menu', 'alert', 'backdrop', 'toast', 'notice']],
+    ['Other', ['subtle']],
+]
+
 function StatusRows() {
     const { Text } = D()
     const c = useMemo(palette, [])
@@ -485,8 +514,9 @@ function StatusRows() {
     if (status.lastError) rows.push(['Last error', status.lastError])
     return (
         <View style={{ borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, padding: 14, gap: 10 }}>
-            <Pressable onPress={() => setOpen(!open)}>
-                <Text variant="text-sm/semibold">Status {open ? '−' : '+'}</Text>
+            <Pressable onPress={() => setOpen(!open)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text variant="text-sm/semibold">Status</Text>
+                <Chevron open={open} />
             </Pressable>
             {open &&
                 rows.map(([k, v]) => (
@@ -503,11 +533,28 @@ function StatusRows() {
     )
 }
 
+function confirmReset(onConfirm: () => void) {
+    const { AlertModal, AlertActionButton, Text } = D()
+    AlertActionCreators.openAlert(
+        `better-animations-reset-${seq++}`,
+        <AlertModal
+            title="Reset all?"
+            content={<Text variant="text-md/normal">Every animation goes back to default.</Text>}
+            actions={
+                <>
+                    <AlertActionButton text="Reset" variant="destructive" onPress={onConfirm} />
+                    <AlertActionButton text="Cancel" variant="secondary" />
+                </>
+            }
+        />,
+    )
+}
+
 export default function SettingsPage({ api }: { api?: any }) {
     const { Stack, Text, TableRowGroup, TableSwitchRow, Button } = D()
     if (!hasStorage() && api?.jsonStorage) bindStorage(api.jsonStorage)
     const [s, setS] = useState<Settings>(settings)
-    const [open, setOpen] = useState<ModuleKey | null>('messages')
+    const [open, setOpen] = useState<ModuleKey | null>(null)
 
     const commit = (next: Settings) => {
         setS(next)
@@ -525,21 +572,25 @@ export default function SettingsPage({ api }: { api?: any }) {
                     />
                 </TableRowGroup>
 
-                {MODULE_KEYS.map(key => (
-                    <ModuleCard
-                        key={key}
-                        id={key}
-                        value={s.modules[key]}
-                        enabled={s.enabled}
-                        open={open === key}
-                        onToggle={() => setOpen(open === key ? null : key)}
-                        onChange={m => commit({ ...s, modules: { ...s.modules, [key]: m } })}
-                    />
+                {SECTIONS.map(([title, keys]) => (
+                    <Section key={title} title={title}>
+                        {keys.map(key => (
+                            <ModuleCard
+                                key={key}
+                                id={key}
+                                value={s.modules[key]}
+                                enabled={s.enabled}
+                                open={open === key}
+                                onToggle={() => setOpen(open === key ? null : key)}
+                                onChange={m => commit({ ...s, modules: { ...s.modules, [key]: m } })}
+                            />
+                        ))}
+                    </Section>
                 ))}
 
                 <StatusRows />
 
-                <Button text="Reset" variant="secondary" size="md" onPress={() => commit({ ...DEFAULTS, modules: { ...DEFAULTS.modules } })} />
+                <Button text="Reset all" variant="destructive" size="md" onPress={() => confirmReset(() => commit({ ...DEFAULTS, modules: { ...DEFAULTS.modules } }))} />
             </Stack>
         </ScrollView>
     )

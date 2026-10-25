@@ -22,7 +22,7 @@ import { Image, ScrollView, View } from 'react-native'
  * 버튼은 네이티브(plugin.jar)가 손가락이 닿은 메시지 줄 밑에 띄운다.
  */
 
-const NATIVE_ID = 'yumistra.double-tap-actions'
+const NATIVE_ID = 'yumistra.message-actions'
 
 type Mode = 'buttons' | 'dialog' | 'default'
 interface Settings {
@@ -87,7 +87,7 @@ function loadPreview() {
 let seq = 0
 const toast = (text: string) => {
     try {
-        ToastActionCreators.open(`double-tap-actions-${Date.now()}-${seq++}`, { text })
+        ToastActionCreators.open(`message-actions-${Date.now()}-${seq++}`, { text })
     } catch {}
 }
 
@@ -184,7 +184,7 @@ function openActions(handlers: any, message: any, channel: any, chatInputRef?: a
     const { AlertModal, AlertActionButton } = D()
     const editable = editableOf(message)
     AlertActionCreators.openAlert(
-        `double-tap-actions-${seq++}`,
+        `message-actions-${seq++}`,
         <AlertModal
             title="Message"
             content={
@@ -314,7 +314,7 @@ async function inlineActions(handlers: any, message: any, channel: any, chatInpu
 /** MessagesHandlers 인스턴스의 두 번 누르기 처리를 감싼다 */
 function wrapInstance(inst: any) {
     const orig = inst?.handleDoubleTapMessage
-    if (typeof orig !== 'function' || orig.__doubleTapActions) return
+    if (typeof orig !== 'function' || orig.__messageActions) return
     const wrapped = function (this: unknown, event: any) {
         try {
             mods()
@@ -329,7 +329,7 @@ function wrapInstance(inst: any) {
         } catch {}
         return orig.apply(this, arguments as any)
     }
-    ;(wrapped as any).__doubleTapActions = true
+    ;(wrapped as any).__messageActions = true
     inst.handleDoubleTapMessage = wrapped
 }
 
@@ -380,7 +380,7 @@ function SettingsPage({ api }: { api: any }) {
     }
     return (
         <ScrollView style={{ flex: 1 }}>
-            <Stack spacing={16} style={{ padding: 16 }}>
+            <Stack spacing={24} style={{ padding: 16, paddingBottom: 48 }}>
                 <Choice
                     title="Swipe to edit"
                     value={s.swipe}
@@ -400,31 +400,22 @@ function SettingsPage({ api }: { api: any }) {
                         ['default', 'Default'],
                     ]}
                 />
-                <TableRowGroup>
-                    <TableSwitchRow
-                        label="Confirm delete"
-                        value={s.confirmDelete}
-                        onValueChange={(confirmDelete: boolean) => save({ confirmDelete })}
-                    />
-                </TableRowGroup>
-                <TableRowGroup title="Edit before delete">
-                    <TableSwitchRow label="Enabled" value={s.editBeforeDelete} onValueChange={(editBeforeDelete: boolean) => save({ editBeforeDelete })} />
+                <TableRowGroup title="Delete">
+                    <TableSwitchRow label="Confirm" value={s.confirmDelete} onValueChange={(confirmDelete: boolean) => save({ confirmDelete })} />
+                    <TableSwitchRow label="Edit before delete" value={s.editBeforeDelete} onValueChange={(editBeforeDelete: boolean) => save({ editBeforeDelete })} />
                 </TableRowGroup>
                 {s.editBeforeDelete && (
-                    <TableRowGroup title="Replace with">
-                        <TextInput value={s.text} onChange={(text: string) => save({ text })} placeholder="** **" size="md" />
-                    </TableRowGroup>
-                )}
-                {s.editBeforeDelete && (
-                    <TableRowGroup title="Delay (ms)">
+                    <Stack spacing={12}>
+                        <TextInput label="Replace with" value={s.text} onChange={(text: string) => save({ text })} placeholder="** **" size="md" />
                         <TextInput
+                            label="Delay (ms)"
                             value={String(s.delay)}
                             onChange={(v: string) => save({ delay: Math.max(0, Math.min(5000, Number(v.replace(/\D/g, '')) || 0)) })}
                             placeholder="300"
                             keyboardType="number-pad"
                             size="md"
                         />
-                    </TableRowGroup>
+                    </Stack>
                 )}
             </Stack>
         </ScrollView>
@@ -509,7 +500,7 @@ export default plugin({
         cleanup(
             getModules(withProps('MessagesHandlers') as any, (mod: any) => {
                 const Orig = mod?.MessagesHandlers
-                if (typeof Orig !== 'function' || Orig.__doubleTapActions) return
+                if (typeof Orig !== 'function' || Orig.__messageActions) return
                 // 채팅 화면이 new MessagesHandlers(...) 할 때 만들어진 인스턴스를 바로 감싼다
                 const Patched: any = function (this: unknown, ...args: any[]) {
                     const inst = Reflect.construct(Orig, args, Patched)
@@ -517,7 +508,7 @@ export default plugin({
                     return inst
                 }
                 Patched.prototype = Orig.prototype
-                Patched.__doubleTapActions = true
+                Patched.__messageActions = true
                 Object.setPrototypeOf(Patched, Orig)
                 try {
                     mod.MessagesHandlers = Patched

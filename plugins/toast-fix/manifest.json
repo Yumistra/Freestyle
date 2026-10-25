@@ -5,7 +5,7 @@
 	"description": "Fixes crashes from old-style toasts.",
 	"author": "Yumistra",
 	"icon": "CircleInformationIcon",
-	"version": "1.0.1",
+	"version": "1.0.0",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

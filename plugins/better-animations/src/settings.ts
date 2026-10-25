@@ -107,11 +107,20 @@ async function current(): Promise<Record<string, any>> {
     }
 }
 
+// 렌더링마다 여러 번 불리므로 저장 내용이 그대로면 만든 걸 다시 쓴다
+let cachedFrom: unknown
+let cachedVersion = -1
+let cached: Settings | undefined
+
 export function settings(): Settings {
     const saved = storage?.cache ?? {}
+    if (cached && cachedFrom === saved && cachedVersion === version) return cached
     const modules = { ...DEFAULTS.modules }
     for (const key of MODULE_KEYS) modules[key] = { ...DEFAULTS.modules[key], ...(saved.modules?.[key] ?? {}) }
-    return { enabled: saved.enabled ?? DEFAULTS.enabled, modules }
+    cached = { enabled: saved.enabled ?? DEFAULTS.enabled, modules }
+    cachedFrom = saved
+    cachedVersion = version
+    return cached
 }
 
 /** 이 부분을 바꿔야 하는지. 꺼져 있거나 "기본"이면 디스코드 그대로 둔다 */

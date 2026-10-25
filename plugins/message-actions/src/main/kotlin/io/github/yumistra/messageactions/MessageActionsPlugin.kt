@@ -1,6 +1,6 @@
-@file:JvmName("DoubleTapActionsPlugin")
+@file:JvmName("MessageActionsPlugin")
 
-package io.github.yumistra.doubletapactions
+package io.github.yumistra.messageactions
 
 import android.animation.ValueAnimator
 import android.content.Context
@@ -48,7 +48,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Double Tap Actions 의 네이티브 부분: 메시지 바로 밑에 디스코드 버튼 줄 끼워 넣기.
+ * Message Actions 의 네이티브 부분: 메시지 바로 밑에 디스코드 버튼 줄 끼워 넣기.
  *
  * 채팅 목록(ChatListView, RecyclerView)은 네이티브라 JS 는 "어느 메시지인지"만 안다.
  * 손가락이 닿은 줄을 기억해 두었다가, JS 가 showActions 를 부르면
@@ -426,7 +426,7 @@ private class Bar(
                 "onRequestDisallowInterceptTouchEvent" -> null
                 "equals" -> proxy === args?.getOrNull(0)
                 "hashCode" -> System.identityHashCode(proxy)
-                "toString" -> "DoubleTapActions.Bar"
+                "toString" -> "MessageActions.Bar"
                 else -> null
             }
         }
@@ -650,7 +650,7 @@ private class Bar(
 private class Touched(val list: WeakReference<ViewGroup>, val row: WeakReference<View>, val at: Long)
 
 @Suppress("UNUSED")
-val doubleTapActionsPlugin = plugin {
+val messageActionsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
     val originalIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
 
