@@ -672,25 +672,51 @@ private fun pickEditIcon(ctx: Context, helper: Any): SwipeIcon? {
     val contextField = c.declaredFields.firstOrNull { !java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == Context::class.java }?.apply { isAccessible = true }
     // 이름이 남아 있으면 그대로
     drawables.firstOrNull { it.name == "editIcon" }?.let { return SwipeIcon(c, it, contextField) }
-    fun stateOf(name: String): android.graphics.drawable.Drawable.ConstantState? {
-        val id = ctx.resources.getIdentifier(name, "drawable", ctx.packageName)
+    // 같은 리소스라도 테마·캐시에 따라 ConstantState 가 다를 수 있어서, 그려 본 모양(투명도)으로 비교한다
+    val res = (contextField?.get(helper) as? Context ?: ctx)
+    fun load(name: String): android.graphics.drawable.Drawable? {
+        val id = res.resources.getIdentifier(name, "drawable", res.packageName)
         if (id == 0) return null
         return try {
-            ctx.getDrawable(id)?.constantState
+            res.getDrawable(id)
         } catch (e: Throwable) {
             null
         }
     }
     fun valueOf(f: java.lang.reflect.Field) = f.get(helper) as? android.graphics.drawable.Drawable
-    stateOf(SWIPE_EDIT_ICON)?.let { edit ->
-        drawables.firstOrNull { valueOf(it)?.constantState === edit }?.let { return SwipeIcon(c, it, contextField) }
+    val edit = load(SWIPE_EDIT_ICON)
+    if (edit != null) {
+        drawables.firstOrNull { f -> valueOf(f)?.let { sameShape(it, edit) } == true }?.let { return SwipeIcon(c, it, contextField) }
     }
     // 답장 아이콘이 아닌 나머지 하나
-    stateOf(SWIPE_REPLY_ICON)?.let { reply ->
-        val others = drawables.filter { valueOf(it)?.constantState !== reply }
-        if (drawables.size == 2 && others.size == 1) return SwipeIcon(c, others[0], contextField)
+    val reply = load(SWIPE_REPLY_ICON)
+    if (reply != null && drawables.size == 2) {
+        val others = drawables.filter { f -> valueOf(f)?.let { sameShape(it, reply) } != true }
+        if (others.size == 1) return SwipeIcon(c, others[0], contextField)
     }
     return null
+}
+
+/** 두 그림의 모양이 같은지 (작게 그려서 투명도만 비교. 색칠·틴트는 무시) */
+private fun sameShape(a: android.graphics.drawable.Drawable, b: android.graphics.drawable.Drawable): Boolean {
+    fun render(d: android.graphics.drawable.Drawable): android.graphics.Bitmap? {
+        // 원래 그림의 크기(bounds)를 건드리지 않게 복사본으로
+        val copy = d.constantState?.newDrawable()?.mutate() ?: return null
+        val bmp = android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ALPHA_8)
+        copy.setBounds(0, 0, 32, 32)
+        copy.draw(android.graphics.Canvas(bmp))
+        return bmp
+    }
+    return try {
+        val x = render(a) ?: return false
+        val y = render(b) ?: return false
+        val same = x.sameAs(y)
+        x.recycle()
+        y.recycle()
+        same
+    } catch (e: Throwable) {
+        false
+    }
 }
 
 @Suppress("UNUSED")
@@ -760,7 +786,7 @@ val messageActionsPlugin = plugin {
         // 세게 당기기가 "버튼"이면 당길 때 연필 대신 ⋯ 아이콘
         var swipeButtons = false
         val buttonIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
-        var swipeSearched = false
+        var swipeTries = 0
         val hooks = ArrayList<XC_MethodHook.Unhook>()
 
         fun swapIcon(h: Any) {
@@ -791,8 +817,9 @@ val messageActionsPlugin = plugin {
 
         /** 처음 채팅 목록을 만질 때 한 번 SwipeHelper 를 찾아, 캔버스에 그리는 메서드들 앞에서 아이콘을 바꾼다 */
         fun findSwipe(list: ViewGroup) {
-            if (swipeSearched) return
-            swipeSearched = true
+            // 못 찾으면 몇 번 더 (채팅 목록이 다 준비되기 전일 수 있다)
+            if (swipeIcon != null || swipeTries >= 5) return
+            swipeTries++
             try {
                 val (helper, si) = findSwipeIcon(list, rvClass) ?: run {
                     log.w("Swipe icon not found")
