@@ -21,7 +21,7 @@ import {
     type EasingKey,
     type ModuleKey,
 } from '../effects'
-import { pingNative } from '../native'
+import { pingNative, VERSION } from '../native'
 import { bindStorage, DEFAULTS, hasStorage, save, settings, status, type ModuleSettings, type Settings } from '../settings'
 import { palette } from './colors'
 import Preview from './Preview'
@@ -320,6 +320,14 @@ function EasingEditor({ value, onChange }: { value: EasingKey; onChange(v: Easin
 
 // ── 모듈 카드 ────────────────────────────────────────────────────
 
+/** 메시지 애니메이션(네이티브)이 안 될 때 이유 */
+function nativeNotice(): string | undefined {
+    if (status.native === false) return 'Native part not loaded. Restart Discord.'
+    if (status.native !== true) return
+    if (status.nativeVersion !== VERSION) return 'Restart Discord to finish updating.'
+    if (status.nativeChat === false) return 'Chat list not found on this Discord version.'
+}
+
 function summaryOf(key: ModuleKey, m: ModuleSettings) {
     const effect = EFFECTS[key].find(e => e.id === m.effect)?.label ?? m.effect
     if (m.effect === 'default') return 'Default'
@@ -354,9 +362,9 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
             </Pressable>
             {open && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 16, gap: 14 }}>
-                    {id === 'messages' && status.native === false && (
+                    {id === 'messages' && nativeNotice() && (
                         <Text variant="text-xs/semibold" style={{ color: '#f23f43' }}>
-                            Native part not loaded. Reinstall and restart Discord.
+                            {nativeNotice()}
                         </Text>
                     )}
                     <Preview module={id} settings={value} />
@@ -495,8 +503,9 @@ function StatusRows() {
     const f = status.found
     const ok = (b: unknown) => (b ? 'ok' : 'missing')
     const rows: Array<[string, string]> = [
-        ['Native', status.native === null ? '…' : status.native ? 'loaded' : 'not loaded'],
+        ['Native', status.native === null ? '…' : status.native ? `loaded${status.nativeVersion ? ` · ${status.nativeVersion}` : ''}` : 'not loaded'],
         ['Native screens', status.nativeScreenHook ? `${status.nativePlayed}` : 'JS'],
+        ['Chat list', status.nativeChat === null ? '…' : status.nativeChat ? 'ok' : 'missing'],
         ['Screens', `${status.screens} · ${status.screenExits} · ${status.nativeScreens}`],
         ['Stack', `${ok(f.stack)} · ${status.stack}`],
         ['Sheets', `${ok(f.sheets)} · ${status.sheets}`],
@@ -513,6 +522,7 @@ function StatusRows() {
         ['Channel list', `${ok(f.layout)} · ${ok(f.channelRows)} · ${ok(f.servers)} · ${status.layouts}`],
         ['Constants', status.constants.length ? status.constants.join(', ') : 'missing'],
     ]
+    if (status.nativeProblems) rows.push(['Native problems', status.nativeProblems])
     if (status.lastError) rows.push(['Last error', status.lastError])
     return (
         <View style={{ borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, padding: 14, gap: 10 }}>
