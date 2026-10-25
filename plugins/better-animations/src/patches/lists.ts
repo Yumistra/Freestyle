@@ -125,19 +125,20 @@ function CaskCell({ children, scrolled, reveal, index = 0 }: { children: any; sc
             else go()
         }
         if (st.play) start(!!reveal && !scrolled)
-        // 다른 화면에 가려졌다가 다시 보일 때만 (잠깐 스치는 포커스 변화는 무시)
-        let blurAt = 0
+        // 덮고 있던 화면이 닫히기 시작할 때(뒤로 밀기 시작) 바로 다시 재생한다.
+        // 다 돌아온 뒤(focus)에 재생하면 이미 보이던 목록이 늦게 다시 움직여서 어색하므로 그때는 안 한다
+        const mountedAt = Date.now()
         const subs: any[] = []
-        if (reveal && typeof navigation?.addListener === 'function') {
-            subs.push(
-                navigation.addListener('blur', () => {
-                    blurAt = Date.now()
-                }),
-                navigation.addListener('focus', () => {
-                    if (blurAt && Date.now() - blurAt > 400) start(true)
-                    blurAt = 0
-                }),
-            )
+        if (reveal) {
+            let nav = navigation
+            for (let i = 0; i < 4 && typeof nav?.addListener === 'function'; i++) {
+                subs.push(
+                    nav.addListener('transitionStart', (e: any) => {
+                        if (e?.data?.closing === false && Date.now() - mountedAt > 400) start(true)
+                    }),
+                )
+                nav = typeof nav.getParent === 'function' ? nav.getParent() : undefined
+            }
         }
         return () => {
             run?.stop()
