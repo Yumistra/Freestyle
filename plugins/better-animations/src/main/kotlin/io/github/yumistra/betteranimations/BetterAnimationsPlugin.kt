@@ -59,6 +59,9 @@ import kotlin.math.sqrt
  */
 
 
+/** 지워진 줄 자리에 이 시간 안에 새 줄이 붙으면 같은 메시지가 바뀐 것으로 본다 (ms) */
+private const val REPLACE_WINDOW = 400L
+
 /** 한 번에 이보다 많이 붙으면 채널을 연(또는 크게 새로 그린) 것으로 본다 */
 private const val OPEN_BATCH = 6
 
@@ -388,10 +391,26 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
     private val tops = HashMap<View, Int>()
     private var attachedInPass = 0
     private var removedInPass = 0
-    private val snapshots = ArrayList<Snapshot>()
+    private val snapshots = ArrayList<Pair<Snapshot, Gone>>()
+    /** 이번 배치에서 붙은 줄 */
+    private val attachedNow = ArrayList<WeakReference<View>>()
+
+    /**
+     * 최근에 지워진 줄의 자리. 같은 자리에 곧바로 새 줄이 붙으면 "같은 메시지가 바뀐 것"으로 본다
+     * (보내는 중 메시지 → 서버가 확인한 메시지는 번호가 달라서 목록이 지우고 새로 붙인다).
+     * 그때는 나타나고 사라지는 효과를 둘 다 건너뛴다
+     */
+    private class Gone(val top: Int, val bottom: Int, val at: Long) {
+        var used = false
+        var cancelExit: (() -> Unit)? = null
+    }
+    private val gone = ArrayList<Gone>()
 
     fun onAttached(parent: ViewGroup, child: View) {
-        if (layingOut === parent) attachedInPass++
+        if (layingOut === parent) {
+            attachedInPass++
+            attachedNow.add(WeakReference(child))
+        }
         reset(child)
         val c = config()
         if (!c.enterOn) return
@@ -511,6 +530,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         layingOut = parent
         attachedInPass = 0
         removedInPass = 0
+        attachedNow.clear()
         tops.clear()
         if (!config().shiftOn) return
         for (i in 0 until parent.childCount) {
@@ -523,7 +543,8 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         if (layingOut !== parent) return
         layingOut = null
         val c = config()
-        val changes = attachedInPass + removedInPass
+        val replaced = matchReplaced(parent)
+        val changes = attachedInPass + removedInPass - replaced * 2
         // 메시지 몇 개가 추가·삭제됐을 때만 (채널을 열거나 크게 새로 그릴 땐 그대로)
         val small = changes in 1..4
         if (c.shiftOn && small && tops.isNotEmpty()) {
@@ -539,10 +560,10 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         tops.clear()
         if (snapshots.isNotEmpty()) {
             val show = c.exitOn && small && removedInPass in 1..3
-            for (snap in snapshots) {
-                if (show) {
+            for ((snap, g) in snapshots) {
+                if (show && !g.used) {
                     try {
-                        startExit(parent, snap, c)
+                        g.cancelExit = startExit(parent, snap, c)
                     } catch (e: Throwable) {
                         snap.discard()
                     }
@@ -550,6 +571,32 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
             }
             snapshots.clear()
         }
+    }
+
+    /**
+     * 이번에 붙은 줄 중 방금 지워진 줄과 같은 자리(위나 아래 끝이 거의 같음)에 붙은 것은 바뀐 메시지로 보고
+     * 나타나는 효과를 바로 멈춘다 (그리기 전이라 숨겨진 모습이 보이지 않는다). 짝이 된 지워진 줄의 사라지는 효과도 멈춘다
+     */
+    private fun matchReplaced(parent: ViewGroup): Int {
+        val now = SystemClock.uptimeMillis()
+        gone.removeAll { now - it.at > REPLACE_WINDOW || it.used }
+        var n = 0
+        if (gone.isNotEmpty()) {
+            val tol = (8 * parent.resources.displayMetrics.density).toInt()
+            for (ref in attachedNow) {
+                val child = ref.get() ?: continue
+                if (child.parent !== parent) continue
+                val slack = max(tol, child.height / 4)
+                val g = gone.firstOrNull { !it.used && (abs(it.top - child.top) <= slack || abs(it.bottom - child.bottom) <= slack) } ?: continue
+                g.used = true
+                g.cancelExit?.invoke()
+                g.cancelExit = null
+                reset(child)
+                n++
+            }
+        }
+        attachedNow.clear()
+        return n
     }
 
     private fun startShift(child: View, delta: Float, c: Config) {
@@ -572,11 +619,12 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         animator.start()
     }
 
-    private fun startExit(parent: ViewGroup, snap: Snapshot, c: Config) {
+    /** 돌려주는 값: 효과를 바로 멈추고 치우는 함수 */
+    private fun startExit(parent: ViewGroup, snap: Snapshot, c: Config): (() -> Unit)? {
         val hidden = hiddenFor(c.exitEffect)
         if (hidden == null) {
             snap.discard()
-            return
+            return null
         }
         val density = parent.resources.displayMetrics.density
         val fromBelow = snap.top + snap.height / 2 >= parent.height / 2
@@ -620,15 +668,18 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
             }
         })
         animator.start()
+        return { animator.cancel() }
     }
 
     fun onDetached(parent: ViewGroup, child: View) {
         if (layingOut === parent && holderOf(parent, child)) {
             removedInPass++
+            val g = Gone(child.top, child.bottom, SystemClock.uptimeMillis())
+            if (gone.size < 8) gone.add(g)
             val c = config()
             if (c.exitOn && snapshots.size < 4 && child.width > 0 && child.bottom > 0 && child.top < parent.height) {
                 try {
-                    Snapshot.of(child)?.let(snapshots::add)
+                    Snapshot.of(child)?.let { snapshots.add(it to g) }
                 } catch (e: Throwable) {
                     // 그리기에 실패하면 이 줄은 효과 없이
                 }
