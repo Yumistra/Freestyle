@@ -6,7 +6,7 @@ import { patchLists } from './patches/lists'
 import { patchNativeScreens } from './patches/screens'
 import { patchSheets } from './patches/sheets'
 import { patchJsStack } from './patches/stack'
-import { patchWorklets } from './patches/worklets'
+import { patchMediaTiming, patchWorklets } from './patches/worklets'
 import { bindStorage, DEFAULTS, onSettingsChange, report } from './settings'
 import SettingsPage from './ui/Settings'
 
@@ -37,6 +37,7 @@ export default plugin({
         tryPatch('stack', patchJsStack)
         tryPatch('sheets', patchSheets)
         tryPatch('worklets', () => patchWorklets(cleanup))
+        tryPatch('media', () => patchMediaTiming(cleanup))
         tryPatch('constants', () => patchConstants(cleanup))
         tryPatch('layout', patchLayout)
         tryPatch('servers', () => patchServerSwitch(cleanup))

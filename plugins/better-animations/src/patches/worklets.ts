@@ -149,11 +149,25 @@ const NOTICE =
     "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
     'return{transform:t,opacity:Math.min(1,h.o+(1-h.o)*Math.min(1,k*1.4))};}'
 
-export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE }
+// 사진·동영상 보기: 디스코드는 entranceAnimationDriver(0 → 1)로 누른 자리에서 커지게 그린다.
+// Zoom 은 그 모습 그대로(속도·곡선은 patchMediaTiming 이 바꿈), 나머지는 제자리에서 우리 효과로
+const MEDIA =
+    'function BetterAnimationsMediaItem(){var c=this.__closure;var BA=c.BA;var k=c.entranceAnimationDriver.get();' +
+    'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
+    'if(BA.zoom){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
+    'var q=1-k;var h=BA.hidden;' +
+    'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
+    "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
+    "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
+    "if(h.ry){t.push({rotateY:h.ry*q+'deg'});}" +
+    'var o=h.o+(1-h.o)*k;' +
+    'return{height:c.sourceHeight,width:c.sourceWidth,top:0,left:0,borderRadius:0,opacity:o<0?0:o>1?1:o,transform:t};}'
+
+export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE, MEDIA }
 
 // ── 디스코드 워클릿 알아보기 ─────────────────────────────────────
 
-type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder' | 'notice'
+type Kind = 'alertCard' | 'alertBackdrop' | 'toast' | 'menu' | 'menuBackdrop' | 'folder' | 'notice' | 'media'
 
 const has = (c: object, ...keys: string[]) => keys.every(k => k in c)
 
@@ -169,11 +183,12 @@ export function kindOf(closure: any): Kind | undefined {
     if (has(closure, 'CONTEXT_MENU_SPRING', 'visible') && Object.keys(closure).length <= 4) return 'menuBackdrop'
     if (has(closure, 'FOLDER_SPRING_PHYSICS', 'fromTop', 'guildItemSize', 'visible', 'cleanUp')) return 'folder'
     if (has(closure, 'notificationGestureY', 'scale', 'initialized', 'PAN_INPUT_RANGE', 'extrapolateConfig', 'interpolate')) return 'notice'
+    if (has(closure, 'entranceAnimationDriver', 'startScale', 'startTranslateX', 'startTranslateY', 'sourceWidth', 'sourceHeight', 'interpolate')) return 'media'
 }
 
-const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder', notice: 'notice' }
-const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER, notice: NOTICE }
-const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders', notice: 'notices' }
+const MODULE_OF: Record<Kind, ModuleKey> = { alertCard: 'alert', alertBackdrop: 'alert', toast: 'toast', menu: 'menu', menuBackdrop: 'menu', folder: 'folder', notice: 'notice', media: 'media' }
+const CODE_OF: Record<Kind, string> = { alertCard: ALERT_CARD, alertBackdrop: ALERT_BACKDROP, toast: TOAST, menu: MENU, menuBackdrop: MENU_BACKDROP, folder: FOLDER, notice: NOTICE, media: MEDIA }
+const COUNTER: Record<Kind, keyof typeof status> = { alertCard: 'alerts', alertBackdrop: 'alerts', toast: 'toasts', menu: 'menus', menuBackdrop: 'menus', folder: 'folders', notice: 'notices', media: 'media' }
 
 // ── 설정 → 워클릿에 넘길 값 ─────────────────────────────────────
 
@@ -259,8 +274,11 @@ export function swapWorklet(updater: any) {
     // 배경 막은 그 창 효과를 바꿨거나, 배경 설정을 바꿨을 때
     const module: ModuleKey | undefined = active(parent) ? parent : backdrop && active('backdrop') ? 'backdrop' : undefined
     if (!module || !ensureReanimated()) return updater
+    // 사진·동영상의 "없음"은 디스코드 모습 그대로 (속도만 0)
+    if (kind === 'media' && active('media')?.effect === 'none') return updater
     let ba = animationConfigFor(module)
     if (!ba) return updater
+    if (kind === 'media') ba = { ...ba, zoom: active('media')?.effect === 'zoom' }
     if (backdrop) {
         ba = { ...ba, dim: backdropDim() }
         status.backdrops++
@@ -310,6 +328,47 @@ export function ensureReanimated() {
     }
     status.found.reanimated = !!(Rea && reaTiming && reaSpring)
     return status.found.reanimated
+}
+
+/**
+ * 사진·동영상 보기가 열릴 때 진행도(entranceAnimationDriver)를 움직이는 withTiming 의 속도·곡선을 바꾼다.
+ * 디스코드 래퍼 withTiming(값, 설정, 'respect-motion-settings', 끝 콜백) 의 끝 콜백 클로저로 알아본다
+ */
+export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void) {
+    const done = new Set<any>()
+    cleanup(
+        getModules(
+            withProps('withTiming') as any,
+            (mod: any) => {
+                if (!mod || done.has(mod)) return
+                const desc = Object.getOwnPropertyDescriptor(mod, 'withTiming')
+                if (!desc || !('value' in desc) || !desc.writable || typeof desc.value !== 'function') return
+                if (!/shouldAnimate/.test(desc.value.__initData?.code ?? '')) return
+                done.add(mod)
+                status.found.media = true
+                cleanup(
+                    instead(mod, 'withTiming', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        try {
+                            const cb = args[3]
+                            if (cb?.__closure && 'setUseEntranceAnimationState' in cb.__closure) {
+                                const m = active('media')
+                                if (m && ensureReanimated()) {
+                                    const duration = m.effect === 'none' ? 1 : m.duration
+                                    const easing = reaEasing(m.easing === 'spring' ? 'back' : m.easing)
+                                    args = [args[0], { ...(args[1] ?? {}), duration, ...(easing ? { easing } : {}) }, ...args.slice(2)]
+                                    status.media++
+                                }
+                            }
+                        } catch (e) {
+                            report('media', e)
+                        }
+                        return orig.apply(this, args)
+                    }),
+                )
+            },
+            { max: 10 } as any,
+        ) as any,
+    )
 }
 
 export function patchWorklets(cleanup: (...fns: Array<() => unknown>) => void) {

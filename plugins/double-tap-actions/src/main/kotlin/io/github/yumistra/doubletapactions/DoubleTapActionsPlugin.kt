@@ -65,6 +65,10 @@ private const val ITEM_TOUCH_LISTENER = "androidx.recyclerview.widget.RecyclerVi
 private const val FONT_MANAGER = "com.facebook.react.common.assets.ReactFontManager"
 /** 이보다 오래전에 닿은 줄은 쓰지 않는다 */
 private const val TOUCH_TTL = 4000L
+/** 메시지를 옆으로 당길 때 원과 아이콘을 그리는 곳 */
+private const val SWIPE_HELPER = "com.discord.chat.presentation.list.SwipeHelper"
+/** 버튼으로 바꿨을 때 당기는 동안 보일 아이콘 (디스코드 ⋯ 아이콘) */
+private const val BUTTONS_ICON = "design_components_icon_native_redesign_generated_images_morehorizontalicon"
 
 // 디스코드 버튼 (design/components/Button/native/ButtonConstants: sm)
 private const val BUTTON_HEIGHT = 32f
@@ -648,6 +652,7 @@ private class Touched(val list: WeakReference<ViewGroup>, val row: WeakReference
 @Suppress("UNUSED")
 val doubleTapActionsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
+    val originalIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
 
     start {
         var touched: Touched? = null
@@ -758,11 +763,62 @@ val doubleTapActionsPlugin = plugin {
             }
         }
 
+        // 세게 당기기가 "버튼"이면 당길 때 연필 대신 ⋯ 아이콘
+        var swipeButtons = false
+        val buttonIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
+        try {
+            val helper = XposedHelpers.findClass(SWIPE_HELPER, cl)
+            unhooks = unhooks + XposedHelpers.findAndHookMethod(
+                helper,
+                "drawContextArea",
+                android.graphics.Canvas::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val h = param.thisObject ?: return
+                        try {
+                            val current = XposedHelpers.getObjectField(h, "editIcon") as? android.graphics.drawable.Drawable ?: return
+                            if (swipeButtons) {
+                                var icon = buttonIcons[h]
+                                if (icon == null) {
+                                    val ctx = XposedHelpers.getObjectField(h, "context") as? Context ?: return
+                                    val id = ctx.resources.getIdentifier(BUTTONS_ICON, "drawable", ctx.packageName)
+                                    if (id == 0) return
+                                    icon = ctx.getDrawable(id)?.mutate() ?: return
+                                    buttonIcons[h] = icon
+                                }
+                                if (current !== icon) {
+                                    originalIcons[h] = current
+                                    XposedHelpers.setObjectField(h, "editIcon", icon)
+                                }
+                            } else {
+                                val orig = originalIcons.remove(h) ?: return
+                                XposedHelpers.setObjectField(h, "editIcon", orig)
+                            }
+                        } catch (e: Throwable) {
+                        }
+                    }
+                },
+            )
+        } catch (e: Throwable) {
+            log.w("Swipe icon not hooked: $e")
+        }
+        registerNativeMethod("${manifest.id}.setSwipeButtons") { args ->
+            swipeButtons = args.getOrNull(0) == true
+            true
+        }
+
         registerNativeMethod("${manifest.id}.ping") { "pong" }
         log.i("Ready to show message actions")
     }
 
     stop {
+        for ((h, icon) in originalIcons) {
+            try {
+                XposedHelpers.setObjectField(h, "editIcon", icon)
+            } catch (e: Throwable) {
+            }
+        }
+        originalIcons.clear()
         for (unhook in unhooks) unhook.unhook()
         unhooks = emptyList()
     }

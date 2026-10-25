@@ -23,6 +23,7 @@ export type ModuleKey =
     | 'toast'
     | 'notice'
     | 'subtle'
+    | 'media'
 
 export interface Hidden {
     /** 투명도 */
@@ -272,6 +273,22 @@ export const FOLDER_EFFECTS: Effect[] = [
 ]
 
 // ── 작은 움직임 (체크박스·라디오·버튼 등 디스코드 공통 스프링) ─────────────
+// ── 사진·동영상 보기 (누른 사진·동영상이 커지며 열림) ─────────────────────
+// zoom = 디스코드처럼 누른 자리에서 커짐 (속도·곡선만 바꿈)
+export const MEDIA_EFFECTS: Effect[] = [
+    { id: 'default', label: 'Default' },
+    { id: 'zoom', label: 'Zoom', hidden: { s: 0.3 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.9 } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
+    { id: 'slideUp', label: 'From bottom', hidden: { o: 0, tyH: 0.3 } },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, ty: -60, s: 0.9 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 70 } },
+    { id: 'rotate', label: 'Rotate', hidden: { o: 0, r: -14, s: 0.6 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { tyH: 1.1, r: -10, s: 1.2 } },
+    { id: 'none', label: 'None' },
+]
+
 export const SUBTLE_EFFECTS: Effect[] = [
     { id: 'default', label: 'Default' },
     { id: 'custom', label: 'Custom', hidden: { o: 0, s: 0.5 } },
@@ -287,6 +304,7 @@ export const EFFECTS: Record<ModuleKey, Effect[]> = {
     servers: SERVER_EFFECTS,
     folder: FOLDER_EFFECTS,
     subtle: SUBTLE_EFFECTS,
+    media: MEDIA_EFFECTS,
     stack: STACK_EFFECTS,
     push: NATIVE_EFFECTS,
     modal: NATIVE_EFFECTS,
@@ -345,6 +363,7 @@ export const DEFAULT_PREVIEW: Record<ModuleKey, { effect: string; duration: numb
     servers: { effect: 'none', duration: 0, easing: 'linear' },
     folder: { effect: 'drop', duration: 350, easing: 'smooth' },
     subtle: { effect: 'custom', duration: 220, easing: 'smooth' },
+    media: { effect: 'zoom', duration: 300, easing: 'out' },
 }
 
 // ── 방향 · 위치 (BetterDiscord 의 Direction / Position) ─────────────────

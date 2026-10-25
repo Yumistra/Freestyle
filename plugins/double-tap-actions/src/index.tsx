@@ -32,8 +32,13 @@ interface Settings {
     doubleTap: Mode
     /** 밑에 버튼에서 삭제는 한 번 더 눌러야 */
     confirmDelete: boolean
+    /** (Edit Before Delete 에서 합침) 내 메시지를 지우기 전에 이 내용으로 먼저 수정 */
+    editBeforeDelete: boolean
+    text: string
+    /** 수정과 삭제 사이 기다리는 시간 (ms) */
+    delay: number
 }
-const DEFAULTS: Settings = { swipe: 'buttons', doubleTap: 'dialog', confirmDelete: true }
+const DEFAULTS: Settings = { swipe: 'buttons', doubleTap: 'dialog', confirmDelete: true, editBeforeDelete: true, text: '** **', delay: 300 }
 let storage: any
 const settings = (): Settings => ({ ...DEFAULTS, ...(storage?.cache ?? {}) })
 
@@ -328,6 +333,27 @@ function wrapInstance(inst: any) {
     inst.handleDoubleTapMessage = wrapped
 }
 
+// ── 지우기 전에 수정 (Edit Before Delete) ─────────────────────────────
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+function shouldEditFirst(channelId: string, messageId: string, local: unknown) {
+    if (local === true) return // 보내기 실패·전송 중인 메시지 (서버에 없음)
+    const message = (Stores as any).MessageStore?.getMessage?.(channelId, messageId)
+    if (!message || !isMine(message)) return
+    if (message.state && message.state !== 'SENT') return
+    if (message.poll) return // 투표는 수정할 수 없음
+    return message
+}
+
+// ── 네이티브: 당길 때 보이는 아이콘 ────────────────────────────────
+
+function syncNative() {
+    try {
+        Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.setSwipeButtons`, [settings().swipe === 'buttons'])).catch(() => {})
+    } catch {}
+}
+
 function Choice<T extends string>({ title, value, options, onChange }: { title: string; value: T; options: [T, string, string?][]; onChange: (v: T) => void }) {
     const { TableRadioGroup, TableRadioRow } = D()
     return (
@@ -340,7 +366,7 @@ function Choice<T extends string>({ title, value, options, onChange }: { title: 
 }
 
 function SettingsPage({ api }: { api: any }) {
-    const { Stack, TableRowGroup, TableSwitchRow, Text } = D()
+    const { Stack, TableRowGroup, TableSwitchRow, TextInput } = D()
     storage ??= api?.jsonStorage
     const [s, setS] = useState<Settings>(settings)
     const save = async (patch: Partial<Settings>) => {
@@ -349,7 +375,8 @@ function SettingsPage({ api }: { api: any }) {
         try {
             await storage?.get?.()
         } catch {}
-        storage?.set({ ...(storage?.cache ?? {}), ...next }, true)
+        await storage?.set({ ...(storage?.cache ?? {}), ...next }, true)
+        syncNative()
     }
     return (
         <ScrollView style={{ flex: 1 }}>
@@ -380,6 +407,25 @@ function SettingsPage({ api }: { api: any }) {
                         onValueChange={(confirmDelete: boolean) => save({ confirmDelete })}
                     />
                 </TableRowGroup>
+                <TableRowGroup title="Edit before delete">
+                    <TableSwitchRow label="Enabled" value={s.editBeforeDelete} onValueChange={(editBeforeDelete: boolean) => save({ editBeforeDelete })} />
+                </TableRowGroup>
+                {s.editBeforeDelete && (
+                    <TableRowGroup title="Replace with">
+                        <TextInput value={s.text} onChange={(text: string) => save({ text })} placeholder="** **" size="md" />
+                    </TableRowGroup>
+                )}
+                {s.editBeforeDelete && (
+                    <TableRowGroup title="Delay (ms)">
+                        <TextInput
+                            value={String(s.delay)}
+                            onChange={(v: string) => save({ delay: Math.max(0, Math.min(5000, Number(v.replace(/\D/g, '')) || 0)) })}
+                            placeholder="300"
+                            keyboardType="number-pad"
+                            size="md"
+                        />
+                    </TableRowGroup>
+                )}
             </Stack>
         </ScrollView>
     )
@@ -389,6 +435,35 @@ export default plugin({
     jsonStorage: { load: true, default: DEFAULTS },
     start({ cleanup, jsonStorage }: any) {
         storage = jsonStorage
+        // 저장된 설정을 다 불러온 뒤 네이티브에 알린다
+        Promise.resolve(jsonStorage?.get?.()).then(syncNative, syncNative)
+        cleanup(() => {
+            try {
+                Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.setSwipeButtons`, [false])).catch(() => {})
+            } catch {}
+        })
+        // 지우기 전에 수정
+        cleanup(
+            getModules(withProps('editMessage', 'deleteMessage') as any, (mod: any) => {
+                if (typeof mod?.deleteMessage !== 'function' || typeof mod?.editMessage !== 'function') return
+                cleanup(
+                    instead(mod, 'deleteMessage', async function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        const [channelId, messageId, local] = args
+                        try {
+                            const { editBeforeDelete, text, delay } = settings()
+                            const message = editBeforeDelete ? shouldEditFirst(channelId, messageId, local) : undefined
+                            if (message && text && message.content !== text) {
+                                await mod.editMessage(channelId, messageId, { content: text })
+                                if (delay > 0) await sleep(delay)
+                            }
+                        } catch {
+                            // 수정에 실패해도 삭제는 한다
+                        }
+                        return orig.apply(this, args)
+                    }),
+                )
+            }) as any,
+        )
         cleanup(
             getModuleWithImportedPath(PREVIEW_PATH, (exports: any) => usePreviewExports(exports)) as any,
         )
