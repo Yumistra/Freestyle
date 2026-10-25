@@ -385,10 +385,10 @@ function AlphaSlider({ value, onChange, onCommit }: { value: number; onChange(v:
     const { Slider, TableRow, Text } = Design as any
     return (
         <TableRow
-            label="위 화면 덧칠"
+            label="Tint"
             trailing={
                 <Text variant="text-sm/semibold" color="text-muted">
-                    {value > 0 ? `${Math.round(value * 100)}%` : '없음'}
+                    {value > 0 ? `${Math.round(value * 100)}%` : 'Off'}
                 </Text>
             }
             subLabel={
@@ -404,22 +404,21 @@ function StatusRows() {
     const { TableRow, Text } = Design as any
     const [open, setOpen] = useState(false)
     const working = status.screenPatched && status.stylesPatched && !!gradientModule
-    const summary = working ? (status.gradientsHidden > 0 ? '정상 작동 중' : '준비됨 · 스레드나 포럼을 열면 적용돼요') : '일부 기능을 찾지 못했어요'
+    const summary = working ? (status.gradientsHidden > 0 ? 'Working' : 'Ready') : 'Some patches failed'
     const rows: Array<[string, string]> = [
-        ['채널 화면', status.screenPatched ? '패치됨' : '못 찾음'],
-        ['안쪽 배경 레이어 숨김', `${status.gradientsHidden}회`],
-        ['안쪽 바탕색 투명', `${status.contextPatched ? '패치됨' : '못 찾음'} · ${status.surfacesCleared}개`],
-        ['아래 화면 보이게 함', `${status.revealed}회`],
-        ['화면 숨김 해제', `${status.stylesPatched ? '패치됨' : '못 찾음'} · ${status.coveredCleared}회`],
-        ['Freeze', `${status.freezePatched}개 · 해제 ${status.unfrozen}회`],
-        ['쌓인 화면', `${status.overlays}회 · 걷어낸 배경 ${status.stripped}개`],
+        ['Channel screen', status.screenPatched ? 'patched' : 'not found'],
+        ['Gradients hidden', `${status.gradientsHidden}`],
+        ['Surfaces', `${status.contextPatched ? 'patched' : 'not found'} · ${status.surfacesCleared}`],
+        ['Revealed', `${status.revealed}`],
+        ['Styles', `${status.stylesPatched ? 'patched' : 'not found'} · ${status.coveredCleared}`],
+        ['Freeze', `${status.freezePatched} · ${status.unfrozen}`],
+        ['Overlays', `${status.overlays} · ${status.stripped}`],
     ]
-    if (status.lastError) rows.push(['마지막 오류', status.lastError])
+    if (status.lastError) rows.push(['Last error', status.lastError])
     return [
         <TableRow
             key="summary"
             label={summary}
-            subLabel={open ? '눌러서 접기' : '눌러서 자세히 보기'}
             trailing={<Text variant="text-lg/bold">{working ? '✓' : '!'}</Text>}
             onPress={() => setOpen(!open)}
         />,
@@ -439,29 +438,21 @@ function SettingsPage({ api }: { api: any }) {
     return (
         <ScrollView style={{ flex: 1 }}>
             <Stack spacing={24} style={{ padding: 16, paddingBottom: 48 }}>
-                <Stack spacing={8}>
-                    <Preview mode={s.mode} alpha={alpha} />
-                    <Text variant="text-xs/medium" color="text-muted" style={{ textAlign: 'center' }}>
-                        미리보기 · 왼쪽이 아래 채팅, 오른쪽이 위에 덮인 스레드
-                    </Text>
-                </Stack>
+                <Preview mode={s.mode} alpha={alpha} />
 
-                <TableRadioGroup title="보이는 방식" value={s.mode} onChange={(mode: Mode) => save({ mode })}>
-                    <TableRadioRow value="screen" label="아래 채팅이 비치게" subLabel="스레드·포럼 뒤로 원래 채팅이 보여요" />
-                    <TableRadioRow value="image" label="배경 이미지만 비치게" subLabel="아래 화면 대신 테마 배경 이미지가 보여요" />
+                <TableRadioGroup title="Show" value={s.mode} onChange={(mode: Mode) => save({ mode })}>
+                    <TableRadioRow value="screen" label="Chat" />
+                    <TableRadioRow value="image" label="Background image" />
                 </TableRadioGroup>
 
                 {s.mode === 'screen' && (
-                    <TableRowGroup title="진하기" description="높일수록 위 화면 글자가 또렷하고, 아래 채팅은 덜 비쳐요.">
+                    <TableRowGroup title="Opacity">
                         <AlphaSlider value={alpha} onChange={setAlpha} onCommit={v => save({ alpha: Math.round(v * 100) / 100 })} />
                     </TableRowGroup>
                 )}
 
-                <TableRowGroup title="상태">{StatusRows()}</TableRowGroup>
+                <TableRowGroup title="Status">{StatusRows()}</TableRowGroup>
 
-                <Text variant="text-xs/normal" color="text-muted">
-                    바꾼 설정은 스레드나 포럼을 다시 열면 적용돼요. 3단계 이상 겹쳐 열면 가장 위와 바로 아래 화면만 보여요.
-                </Text>
             </Stack>
         </ScrollView>
     )

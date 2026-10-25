@@ -177,11 +177,38 @@ private class Rv(cl: ClassLoader) {
         null
     }
 
-    fun invalidateDecorations(list: View) {
+    private val scrollState: Method? = try {
+        rv.getMethod("getScrollState")
+    } catch (e: Throwable) {
+        null
+    }
+
+    /** 0 = 멈춤 */
+    fun scrollState(list: View): Int = try {
+        scrollState?.invoke(list) as? Int ?: 0
+    } catch (e: Throwable) {
+        0
+    }
+
+    /**
+     * 여백을 다시 재고 바로 다시 배치한다.
+     * RN 화면 안이라 requestLayout 이 위로 올라가지 않아서(ReactViewGroup 이 막음) 직접 measure/layout 해야 한다
+     * (디스코드도 목록을 바꿀 때 measureAndLayout 으로 이렇게 한다)
+     */
+    fun relayout(list: View) {
         try {
             invalidateDecor.invoke(list)
         } catch (e: Throwable) {
             list.requestLayout()
+        }
+        if (list.width <= 0 || list.height <= 0) return
+        try {
+            list.measure(
+                View.MeasureSpec.makeMeasureSpec(list.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(list.height, View.MeasureSpec.EXACTLY),
+            )
+            list.layout(list.left, list.top, list.right, list.bottom)
+        } catch (e: Throwable) {
         }
     }
 
@@ -325,7 +352,11 @@ private class Bar(
         private set
     private var progress = 0f
     private var anim: ValueAnimator? = null
-    private var anchorTop = Int.MIN_VALUE
+    /** 버튼 줄이 없을 때 이 메시지가 있던 위치 (펼치고 접는 동안 여기 맞춘다) */
+    private var originTop = Int.MIN_VALUE
+    /** 지난 프레임에 맞춘 위치 (그 사이 사용자가 스크롤했는지 알아보려고) */
+    private var lastTarget = Int.MIN_VALUE
+    private var startListHeight = 0
     private var compensating = false
     private var closing = false
     private var delivered = false
@@ -448,15 +479,22 @@ private class Bar(
     private fun animateTo(target: Float, onEnd: () -> Unit = {}) {
         anim?.cancel()
         val start = progress
-        anchorTop = findRow()?.top ?: Int.MIN_VALUE
-        // 펼칠 때만 이 메시지를 제자리에 둔다. 접을 때는 스크롤·키보드와 싸우지 않게 그냥 둔다
-        compensating = target > start
+        val row = findRow()
+        if (row != null) {
+            // 처음 펼칠 때, 또는 펼쳐 둔 사이에 스크롤했으면 지금 위치를 기준으로
+            if (originTop == Int.MIN_VALUE || row.top != lastTarget) originTop = row.top
+            compensating = true
+        } else {
+            compensating = false
+        }
+        startListHeight = list.height
         anim = animateSpring(SPRING_STANDARD, {
             progress = start + (target - start) * it
             val h = (fullHeight * progress).roundToInt()
             if (h != height) {
                 height = h
-                rv.invalidateDecorations(list)
+                rv.relayout(list)
+                keepRow()
             }
             container.alpha = progress
             val s = 0.96f + 0.04f * progress
@@ -469,19 +507,30 @@ private class Bar(
         })
     }
 
-    /** 매 프레임 (그리기 직전): 메시지 위치 유지, 버튼 줄 위치 맞추기 */
+    /**
+     * 이 메시지는 제자리에 두고 밑의 메시지만 밀고 당긴다 (화면 밑에 닿으면 위로 자란다).
+     * 사용자가 스크롤하거나 목록 크기가 바뀌면(키보드) 그만둔다
+     */
+    private fun keepRow() {
+        if (!compensating || originTop == Int.MIN_VALUE) return
+        if (rv.scrollState(list) != 0 || list.height != startListHeight) {
+            compensating = false
+            return
+        }
+        val row = findRow() ?: return
+        val bottomLimit = list.height - list.paddingBottom - row.height - height
+        val want = min(originTop, max(bottomLimit, list.paddingTop - row.height))
+        val dy = row.top - want
+        if (dy != 0) list.scrollBy(0, dy)
+        lastTarget = findRow()?.top ?: want
+    }
+
+    /** 매 프레임 (그리기 직전): 버튼 줄 위치 맞추기 */
     private fun update() {
         val row = findRow()
         if (row == null) {
             container.visibility = View.INVISIBLE
             return
-        }
-        if (compensating && anchorTop != Int.MIN_VALUE) {
-            // 펼쳐지는 동안 이 메시지는 제자리에 두고 밑의 메시지를 민다 (화면 밑에 닿으면 위로 자란다)
-            val bottomLimit = list.height - list.paddingBottom - row.height - height
-            val want = min(anchorTop, max(bottomLimit, list.paddingTop - row.height))
-            val dy = row.top - want
-            if (dy != 0) list.scrollBy(0, dy)
         }
         container.visibility = View.VISIBLE
         val x = (row.left + inset).toFloat()
@@ -587,7 +636,9 @@ private class Bar(
         } catch (e: Throwable) {
         }
         list.removeOnAttachStateChangeListener(detach)
-        rv.invalidateDecorations(list)
+        rv.relayout(list)
+        keepRow()
+        compensating = false
         onClosed(this)
     }
 }

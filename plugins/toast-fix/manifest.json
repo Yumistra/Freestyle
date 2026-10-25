@@ -2,10 +2,10 @@
 	"format": 1,
 	"id": "yumistra.toast-fix",
 	"name": "Toast Fix",
-	"description": "옛날(Vendetta) 방식으로 알림을 띄우는 플러그인 때문에 앱이 튕기는 문제(Cannot read property 'position' of undefined)를 막습니다.",
+	"description": "Fixes crashes from old-style toasts.",
 	"author": "Yumistra",
 	"icon": "CircleInformationIcon",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

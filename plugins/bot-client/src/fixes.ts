@@ -59,5 +59,5 @@ export function installUserFixes(unpatches: Array<() => void>) {
         unpatches.push(() => FluxDispatcher.unsubscribe(type, patchCurrentUser))
     }
     patchCurrentUser()
-    log('info', '사용자 필드 보정 설치 (이벤트 기반)')
+    log('info', 'User field fixes installed')
 }

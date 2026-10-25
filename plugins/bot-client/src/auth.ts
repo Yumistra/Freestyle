@@ -35,11 +35,11 @@ export async function loginWithBotToken(raw: string) {
     if (switcher) return switcher.switchAccountToken(token)
     const login = findByProps('loginToken')
     if (login) return login.loginToken(token)
-    throw new Error('로그인 모듈(switchAccountToken / loginToken)을 찾지 못했습니다')
+    throw new Error('Login module (switchAccountToken / loginToken) not found')
 }
 
 export function logout() {
     const mod = findByProps('logout', 'loginToken')
-    if (!mod) throw new Error('logout 모듈을 찾지 못했습니다')
+    if (!mod) throw new Error('Logout module not found')
     return mod.logout()
 }

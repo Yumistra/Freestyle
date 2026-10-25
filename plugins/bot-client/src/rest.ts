@@ -110,7 +110,7 @@ async function forumSearch({ match, opts, get }: RuleCtx) {
         first_messages: await starterMessages([...pageIds], get),
         most_recent_messages: [],
     }
-    log('info', `포럼 목록 대체: ${page.length}/${threads.length}개`)
+    log('info', `Forum list replaced: ${page.length}/${threads.length}`)
     return respond(body)
 }
 
@@ -185,7 +185,7 @@ const METHODS = [
 export function installRest(unpatches: Array<() => void>) {
     const http = findByProps('getAPIBaseURL', 'get')
     if (!http) {
-        log('error', 'REST 모듈(HTTP)을 찾지 못함')
+        log('error', 'REST module (HTTP) not found')
         return
     }
     const rawGet = http.get.bind(http) // 패치 전 원본 GET
@@ -207,10 +207,10 @@ export function installRest(unpatches: Array<() => void>) {
                 if (extra.length && extra.some(re => re.test(path))) return obj()
 
                 const res = original.apply(http, args)
-                res?.then?.(undefined, (e: any) => log('rest', `${method} ${path} → ${e?.status ?? '오류'} ${e?.body?.message ?? ''}`))
+                res?.then?.(undefined, (e: any) => log('rest', `${method} ${path} → ${e?.status ?? 'error'} ${e?.body?.message ?? ''}`))
                 return res
             }),
         )
     }
-    log('info', 'REST 패치 적용됨')
+    log('info', 'REST patches applied')
 }

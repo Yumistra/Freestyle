@@ -94,7 +94,7 @@ function persist() {
         () => s.set({ ...settings() }, true),
         () => s.set({ ...settings() }, true),
     )
-    writing.catch(e => console.error('[BotClient] 설정 저장 실패', e))
+    writing.catch(e => console.error('[BotClient] save failed', e))
 }
 
 /** 바뀐 값만 반영한다. 같은 값 재저장은 건너뛴다 */

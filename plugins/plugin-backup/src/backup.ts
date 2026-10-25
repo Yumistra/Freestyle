@@ -78,7 +78,7 @@ function internal(): any {
         // 저장소 API도 같이 확인
         if (typeof (Repos as any).listRepos !== 'function') api = undefined
     } catch {}
-    if (!api?.pList) throw new Error('Revenge 내부 플러그인 API(revenge.hidden)를 찾지 못했습니다')
+    if (!api?.pList) throw new Error('Revenge plugin API (revenge.hidden) not found')
     return api
 }
 
@@ -103,7 +103,7 @@ function aliasesOf(path: string) {
 function documentsRelative(path: string) {
     const docs: string = fileModule().getConstants().DocumentsDirPath.replace(/\/+$/, '')
     for (const d of aliasesOf(docs)) for (const p of aliasesOf(path)) if (p.startsWith(`${d}/`)) return p.slice(d.length + 1)
-    throw new Error(`앱 문서 폴더 밖의 경로라 쓸 수 없습니다: ${path}`)
+    throw new Error(`Path outside the documents folder: ${path}`)
 }
 
 async function readBinary(path: string): Promise<string> {
@@ -177,7 +177,7 @@ export async function createBackup(progress: (text: string) => void = () => {}):
             source: source ? { repo: source.repo ?? null, channel: source.channel ?? 'latest', held: !!source.held } : null,
         })
 
-        progress(`설정 읽는 중: ${plugin.manifest.name}`)
+        progress(`Reading ${plugin.manifest.name}`)
         const main = await readText(storagePathOf(id))
         if (main) {
             storage[id] = main
@@ -200,7 +200,7 @@ export async function createBackup(progress: (text: string) => void = () => {}):
     for (const rel of referenced) {
         n++
         if (rel.startsWith(`${SELF_ID}/`) || rel.split('/').includes('..')) continue
-        progress(`데이터 파일 복사 중 (${n}/${referenced.size})`)
+        progress(`Copying files (${n}/${referenced.size})`)
         try {
             const base64 = await readBinary(`${root}/${rel}`)
             if (typeof base64 !== 'string' || base64.length > MAX_FILE_CHARS || total + base64.length > MAX_TOTAL_CHARS) continue
@@ -225,10 +225,10 @@ export function parseBackup(text: string): Backup {
     try {
         data = JSON.parse(text.trim())
     } catch {
-        throw new Error('백업 형식(JSON)이 아닙니다')
+        throw new Error('Not a backup (JSON)')
     }
-    if (data?.kind !== KIND || !Array.isArray(data.plugins)) throw new Error('Plugin Backup으로 만든 백업이 아닙니다')
-    if (data.format > FORMAT) throw new Error('더 새 버전의 Plugin Backup으로 만든 백업입니다')
+    if (data?.kind !== KIND || !Array.isArray(data.plugins)) throw new Error('Not a Plugin Backup backup')
+    if (data.format > FORMAT) throw new Error('Made with a newer Plugin Backup')
     const obj = (v: any) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
     const filesData: Record<string, string> = obj(data.filesData)
     return {
@@ -297,7 +297,7 @@ export function summaryOf(b: Backup) {
     const installed = b.plugins.filter(p => !p.internal).length
     const settings = Object.keys(b.storage).length + Object.keys(b.data ?? {}).length
     const files = fileCountOf(b)
-    return `플러그인 ${installed}개 · 저장소 ${b.repos.length}개 · 설정 ${settings}개${files ? ` · 파일 ${files}개 (${formatBytes(fileBytesOf(b))})` : ''}`
+    return `${installed} plugins · ${b.repos.length} repos · ${settings} settings${files ? ` · ${files} files (${formatBytes(fileBytesOf(b))})` : ''}`
 }
 
 /** 플러그인 하나가 백업에 가진 데이터 개수 (설정 파일 + 데이터 파일) */
@@ -350,17 +350,17 @@ export async function restoreBackup(b: Backup, opts: RestoreOptions, progress: (
 
     // 1. 저장소: 백업에 있던 걸 앞에, 지금 있는 것 중 백업에 없는 건 뒤에 그대로 둔다
     if (opts.repos && b.repos.length) {
-        progress('저장소 추가 중…')
+        progress('Adding repositories…')
         const current = ((await Repos.listRepos()) as any[]).filter(r => !r.internal)
         const known = new Set(b.repos.map(r => r.url))
         await Repos.setRepos([...b.repos.map(r => ({ url: r.url, enabled: r.enabled })), ...current.filter(r => !known.has(r.url)).map(r => ({ url: r.url, enabled: !!r.enabled }))])
         for (const repo of b.repos) {
             if (!repo.enabled) continue
-            progress(`저장소 새로고침: ${repo.url}`)
+            progress(`Refreshing ${repo.url}`)
             try {
                 await Repos.refreshRepo(repo.url)
             } catch (e) {
-                result.failed.push({ id: repo.url, reason: `저장소 새로고침 실패: ${messageOf(e)}` })
+                result.failed.push({ id: repo.url, reason: `refresh failed: ${messageOf(e)}` })
             }
         }
     }
@@ -371,10 +371,10 @@ export async function restoreBackup(b: Backup, opts: RestoreOptions, progress: (
             if (p.internal || p.id === SELF_ID || I.pList.has(p.id)) continue
             const repo = p.source?.repo
             if (!repo) {
-                result.skipped.push({ id: p.name, reason: '파일로 직접 설치한 플러그인이라 다시 받을 수 없음' })
+                result.skipped.push({ id: p.name, reason: 'installed from file' })
                 continue
             }
-            progress(`설치 중: ${p.name}`)
+            progress(`Installing ${p.name}`)
             const targets = [
                 // 버전을 고정해 뒀던 건 그 버전으로, 아니면 쓰던 채널로
                 p.source!.held ? { repo, version: p.version } : { repo, channel: p.source!.channel || 'latest' },
@@ -406,13 +406,13 @@ export async function restoreBackup(b: Backup, opts: RestoreOptions, progress: (
         for (const rel of rels) {
             n++
             if (rel.startsWith(`${SELF_ID}/`) || rel.split('/').includes('..')) continue
-            progress(`데이터 파일 복원 중 (${n}/${rels.length})`)
+            progress(`Restoring files (${n}/${rels.length})`)
             try {
                 const base64 = b.filesData?.[rel] ?? (await readBinary(`${sidecarDirOf(b)}/${rel}`))
                 await writeBinary(`${root}/${rel}`, base64)
                 result.files++
             } catch (e) {
-                result.failed.push({ id: rel, reason: `파일 복원 실패: ${messageOf(e)}` })
+                result.failed.push({ id: rel, reason: `file restore failed: ${messageOf(e)}` })
             }
         }
     }
@@ -425,21 +425,21 @@ export async function restoreBackup(b: Backup, opts: RestoreOptions, progress: (
         ]
         for (const [rel, raw] of texts) {
             if (rel.startsWith(`${SELF_ID}/`) || rel.split('/').includes('..') || typeof raw !== 'string') continue
-            progress(`설정 복원: ${rel}`)
+            progress(`Restoring ${rel}`)
             const text = relocate(raw, b.root, root)
             try {
                 await writeFile(`${root}/${rel}`, text)
                 if (rel === `${THEMES_ID}/state.json`) await applyThemesState(text)
                 result.storage++
             } catch (e) {
-                result.failed.push({ id: rel, reason: `설정 복원 실패: ${messageOf(e)}` })
+                result.failed.push({ id: rel, reason: `settings restore failed: ${messageOf(e)}` })
             }
         }
     }
 
     // 5. 켜짐/꺼짐 상태. 방금 설치한 플러그인은 등록될 때까지 잠깐 기다린다
     if (opts.enabled) {
-        progress('켜짐 상태 맞추는 중…')
+        progress('Updating enabled state…')
         const wanted = b.plugins.filter(p => p.id !== SELF_ID)
         for (let i = 0; i < 25 && wanted.some(p => p.source?.repo && !I.pList.has(p.id) && result.installed.includes(p.name)); i++) await sleep(200)
 
@@ -456,7 +456,7 @@ export async function restoreBackup(b: Backup, opts: RestoreOptions, progress: (
                     else await I.disablePluginInActiveSlot(plugin)
                     result.toggled++
                 } catch (e) {
-                    result.failed.push({ id: p.name, reason: `${want ? '켜기' : '끄기'} 실패: ${messageOf(e)}` })
+                    result.failed.push({ id: p.name, reason: `${want ? 'enable' : 'disable'} failed: ${messageOf(e)}` })
                 }
             }
         }

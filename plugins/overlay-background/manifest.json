@@ -2,10 +2,10 @@
 	"format": 1,
 	"id": "yumistra.overlay-background",
 	"name": "Overlay Background",
-	"description": "포럼, 스레드처럼 채팅 위에 덮이는 화면을 반투명하게 해서 아래 채팅이 비치게 합니다.",
+	"description": "See-through overlay screens.",
 	"author": "Yumistra",
 	"icon": "ImageIcon",
-	"version": "1.5.0",
+	"version": "1.5.1",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

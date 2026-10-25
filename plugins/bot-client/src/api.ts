@@ -30,8 +30,8 @@ export async function botRequest(method: string, path: string, body?: unknown, t
 /** 봇 토큰인지 확인하고, 포털 설정(특권 인텐트 허용 여부)을 가져온다. 유저 토큰은 거부. */
 export async function validateBotToken(token: string) {
     const me = await botRequest('GET', '/users/@me', undefined, token)
-    if (!me.ok) throw new Error(`토큰 확인 실패 (HTTP ${me.status}) — 토큰을 다시 확인하세요`)
-    if (!me.body?.bot) throw new Error('봇 토큰만 지원합니다')
+    if (!me.ok) throw new Error(`Token check failed (HTTP ${me.status})`)
+    if (!me.body?.bot) throw new Error('Bot tokens only')
     const app = await botRequest('GET', '/applications/@me', undefined, token)
     return {
         user: me.body,
@@ -57,7 +57,7 @@ export function deferInteraction(i: any) {
     const type = i?.type === 3 ? 6 : i?.type === 4 ? 8 : 5
     const body = type === 8 ? { type, data: { choices: [] } } : { type }
     botRequest('POST', `/interactions/${i.id}/${i.token}/callback`, body).then(
-        r => log(r.ok ? 'info' : 'error', `인터랙션 defer → HTTP ${r.status}`),
-        e => log('error', `인터랙션 defer 실패: ${String(e)}`),
+        r => log(r.ok ? 'info' : 'error', `Interaction defer → HTTP ${r.status}`),
+        e => log('error', `Interaction defer failed: ${String(e)}`),
     )
 }
