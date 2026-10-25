@@ -71,7 +71,7 @@ export const DEFAULTS: Settings = {
         toast: { effect: 'slide', duration: 380, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },
         notice: { effect: 'default', duration: 300, easing: 'out', direction: 'auto', position: 'auto' },
         subtle: { effect: 'default', duration: 260, easing: 'spring' },
-        media: { effect: 'default', duration: 320, easing: 'out', direction: 'auto', position: 'auto' },
+        media: { effect: 'default', duration: 320, easing: 'out', exit: 'default', direction: 'auto', position: 'auto' },
     },
 }
 

@@ -2,8 +2,8 @@ import { getModules, lookupModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { Dimensions } from 'react-native'
-import { applyMove, easingFrom, effectOf, exitEffectOf, springFor, type ModuleKey } from '../effects'
-import { active, report, status, version } from '../settings'
+import { applyMove, easingFrom, effectOf, exitEffectOf, springFor, type Effect, type ModuleKey } from '../effects'
+import { active, report, settings, status, version, type ModuleSettings } from '../settings'
 
 /**
  * 확인창·토스트·팝업 메뉴는 Reanimated 워클릿(UI 스레드에서 도는 함수)으로 움직인다.
@@ -153,9 +153,10 @@ const NOTICE =
 // Zoom 은 그 모습 그대로(속도·곡선은 patchMediaTiming 이 바꿈), 나머지는 제자리에서 우리 효과로
 const MEDIA =
     'function BetterAnimationsMediaItem(){var c=this.__closure;var BA=c.BA;var k=c.entranceAnimationDriver.get();' +
+    'var cl=c.BA_closing?c.BA_closing.get():0;' +
     'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
-    'if(BA.zoom){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
-    'var q=1-k;var h=BA.hidden;' +
+    'if(cl?BA.zoomExit:BA.zoom){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
+    'var q=1-k;var h=cl?BA.exit:BA.hidden;' +
     'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
     "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
     "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
@@ -263,22 +264,90 @@ function backdropDim() {
 
 const BACKDROP_KINDS = new Set<Kind>(['alertBackdrop', 'menuBackdrop'])
 
+// ── 사진·동영상 보기 ─────────────────────────────────────────────
+
+/** 닫을 때 우리 효과를 쓰는지 (Default = 디스코드처럼 아래·위로 밀어 닫기) */
+function mediaExitEffect(m: ModuleSettings): Effect | undefined {
+    if (!m.exit || m.exit === 'default') return
+    const e = exitEffectOf('media', m.effect, m.exit)
+    if (e.id === 'default' || e.id === 'none' || !e.hidden) return
+    return e
+}
+
+const mediaCache = new Map<string, any>()
+function mediaConfig(m: ModuleSettings) {
+    const W = Dimensions.get('window')
+    const key = `${version}:${m.effect}:${m.exit}:${m.direction}:${m.position}:${W.width}x${W.height}`
+    let ba = mediaCache.get(key)
+    if (ba) return ba
+    const move = { direction: m.direction, position: m.position }
+    const enterCustom = m.effect !== 'default' && m.effect !== 'none'
+    const e = mediaExitEffect(m)
+    const hidden = applyMove(effectOf('media', m.effect).hidden, move, W.width, W.height)
+    ba = {
+        hidden,
+        exit: e ? applyMove(e.hidden, move, W.width, W.height) : hidden,
+        zoom: !enterCustom || m.effect === 'zoom',
+        zoomExit: e?.id === 'zoom',
+        W: W.width,
+        H: W.height,
+    }
+    mediaCache.set(key, ba)
+    if (mediaCache.size > 8) mediaCache.delete(mediaCache.keys().next().value as string)
+    return ba
+}
+
+const mediaSettings = () => {
+    const s = settings()
+    return s.enabled ? s.modules.media : undefined
+}
+
+/** 열린 보기의 진행도(공유 값) → 닫는 중 표시(우리 공유 값) */
+const closingOf = new WeakMap<object, any>()
+let lastDriver: any
+let discordTiming: ((...a: any[]) => any) | undefined
+
+function makeMutable(v: number) {
+    const mk = Rea?.makeMutable
+    return typeof mk === 'function' ? mk(v) : undefined
+}
+
+function setShared(sv: any, v: unknown) {
+    if (typeof sv?.set === 'function') sv.set(v)
+    else sv.value = v
+}
+
+function swapMedia(updater: any, closure: any) {
+    const m = mediaSettings()
+    if (!m) return updater
+    const enterCustom = m.effect !== 'default' && m.effect !== 'none'
+    if (!enterCustom && !mediaExitEffect(m)) return updater
+    if (!ensureReanimated()) return updater
+    const driver = closure.entranceAnimationDriver
+    let closing = closingOf.get(driver)
+    if (!closing) {
+        closing = makeMutable(0)
+        if (closing) closingOf.set(driver, closing)
+    }
+    lastDriver = driver
+    status.media++
+    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null })
+}
+
 /** 디스코드 워클릿이면 우리 것으로 바꾼 워클릿을, 아니면 원래 것을 돌려준다 */
 export function swapWorklet(updater: any) {
     const closure = updater?.__closure
     if (!closure || closure.BA) return updater
     const kind = kindOf(closure)
     if (!kind) return updater
+    if (kind === 'media') return swapMedia(updater, closure)
     const parent = MODULE_OF[kind]
     const backdrop = BACKDROP_KINDS.has(kind)
     // 배경 막은 그 창 효과를 바꿨거나, 배경 설정을 바꿨을 때
     const module: ModuleKey | undefined = active(parent) ? parent : backdrop && active('backdrop') ? 'backdrop' : undefined
     if (!module || !ensureReanimated()) return updater
-    // 사진·동영상의 "없음"은 디스코드 모습 그대로 (속도만 0)
-    if (kind === 'media' && active('media')?.effect === 'none') return updater
     let ba = animationConfigFor(module)
     if (!ba) return updater
-    if (kind === 'media') ba = { ...ba, zoom: active('media')?.effect === 'zoom' }
     if (backdrop) {
         ba = { ...ba, dim: backdropDim() }
         status.backdrops++
@@ -346,6 +415,7 @@ export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void
                 if (!/shouldAnimate/.test(desc.value.__initData?.code ?? '')) return
                 done.add(mod)
                 status.found.media = true
+                discordTiming = desc.value
                 cleanup(
                     instead(mod, 'withTiming', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
                         try {
@@ -357,6 +427,44 @@ export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void
                                     const easing = reaEasing(m.easing === 'spring' ? 'back' : m.easing)
                                     args = [args[0], { ...(args[1] ?? {}), duration, ...(easing ? { easing } : {}) }, ...args.slice(2)]
                                     status.media++
+                                }
+                            }
+                        } catch (e) {
+                            report('media', e)
+                        }
+                        return orig.apply(this, args)
+                    }),
+                )
+            },
+            { max: 10 } as any,
+        ) as any,
+    )
+    // 닫기: 디스코드는 withSpring 으로 아래·위로 밀어낸 뒤 handleClose 를 부른다.
+    // 우리 효과면 그 대신 진행도를 1 → 0 으로 되돌려(우리 워클릿이 나가는 모습을 그림) 끝나면 같은 콜백으로 닫는다
+    const doneSpring = new Set<any>()
+    cleanup(
+        getModules(
+            withProps('withSpring') as any,
+            (mod: any) => {
+                if (!mod || doneSpring.has(mod)) return
+                const desc = Object.getOwnPropertyDescriptor(mod, 'withSpring')
+                if (!desc || !('value' in desc) || !desc.writable || typeof desc.value !== 'function') return
+                if (!/shouldAnimate|respect-motion/.test(desc.value.__initData?.code ?? '')) return
+                doneSpring.add(mod)
+                cleanup(
+                    instead(mod, 'withSpring', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        try {
+                            const cb = args[3]
+                            if (cb?.__closure && 'handleClose' in cb.__closure && lastDriver && discordTiming) {
+                                const m = mediaSettings()
+                                const closing = closingOf.get(lastDriver)
+                                if (m && closing && mediaExitEffect(m) && ensureReanimated()) {
+                                    const easing = reaEasing(m.easing === 'spring' ? 'back' : m.easing)
+                                    setShared(closing, 1)
+                                    setShared(lastDriver, discordTiming(0, { duration: m.duration, ...(easing ? { easing } : {}) }, args[2] ?? 'respect-motion-settings', cb))
+                                    status.media++
+                                    // 끌어 놓은 자리는 가운데로 돌아오게 (닫기 콜백은 위에서)
+                                    return orig.apply(this, [0, args[1], args[2]])
                                 }
                             }
                         } catch (e) {

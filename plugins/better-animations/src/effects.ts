@@ -321,7 +321,9 @@ export const effectOf = (module: ModuleKey, id: string): Effect => EFFECTS[modul
 /** 나갈 때 효과로 고를 수 있는 것: "같게" + 기본·없음을 뺀 효과들 */
 export function exitChoices(module: ModuleKey): Effect[] {
     const through = THROUGH_MODULES.has(module) ? [{ id: THROUGH_ID, label: 'Through' }] : []
-    return [{ id: SAME_ID, label: 'Same' }, ...through, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
+    // 사진·동영상은 디스코드 닫기(밀어 닫기)를 그대로 둘 수 있게
+    const keep = module === 'media' ? [{ id: DEFAULT_ID, label: 'Default' }] : []
+    return [...keep, { id: SAME_ID, label: 'Same' }, ...through, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
 }
 
 /** "반대쪽으로 지나가기"를 고를 수 있는 곳 (옛 것과 새 것이 같이 보이는 곳) */

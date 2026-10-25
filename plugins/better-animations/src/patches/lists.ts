@@ -92,11 +92,11 @@ export const randomColor = () => `rgb(${Math.floor(Math.random() * 256)},${Math.
 
 const fill = { position: 'absolute' as const, top: 0, bottom: 0, left: 0, right: 0 }
 
-function CaskCell({ children }: { children: any }) {
+function CaskCell({ children, scrolled }: { children: any; scrolled?: boolean }) {
     const [st] = useState(() => {
         const m = active('lists')
         const style = caskStyleOf(m?.effect)
-        const play = !!m && !!style && (m.always || scrolling())
+        const play = !!m && !!style && (m.always || scrolling() || !!scrolled)
         return { play, style: style ?? '', duration: m?.duration ?? 500, p: new Animated.Value(play ? 0 : 1), color: randomColor() }
     })
     useEffect(() => {
@@ -174,22 +174,56 @@ const settle = () => {
     until = 0
 }
 
+/**
+ * FastList 의 스크롤 위치(공유 값)가 최근에 바뀌었는지. 서버 목록은 스크롤 이벤트를 JS 로 안 넘겨줘서
+ * 새 줄이 그려질 때 위치가 움직였는지로 스크롤 중인지 안다
+ */
+const fastPos = new WeakMap<object, { pos: unknown; at: number }>()
+function movedRecently(sv: any) {
+    if (!sv || typeof sv !== 'object') return false
+    let pos: unknown
+    try {
+        pos = typeof sv.get === 'function' ? sv.get() : sv.value
+    } catch {
+        return false
+    }
+    const st = fastPos.get(sv)
+    if (!st) {
+        fastPos.set(sv, { pos, at: 0 })
+        return false
+    }
+    if (pos !== st.pos) {
+        st.pos = pos
+        st.at = Date.now()
+    }
+    return Date.now() - st.at < 600
+}
+
+const fastCache = new WeakMap<Function, WeakMap<object, Function>>()
+const NO_SV = {}
+
 /** Discord FastList (서버 목록 등): renderItem(section, row, …) */
-function wrapFastRenderItem(orig: any) {
+function wrapFastRenderItem(orig: any, sv: any) {
     if (typeof orig !== 'function') return orig
-    let w = renderCache.get(orig)
+    const svKey = sv && typeof sv === 'object' ? sv : NO_SV
+    let bySv = fastCache.get(orig)
+    if (!bySv) {
+        bySv = new WeakMap()
+        fastCache.set(orig, bySv)
+    }
+    let w = bySv.get(svKey)
     if (!w) {
         w = function (this: unknown, section: any, row: any) {
             const el = orig.apply(this, arguments as any)
             try {
                 if (!el || !active('lists')) return el
-                return createElement(CaskCell, { key: `${section}:${row}` }, el)
+                return createElement(CaskCell, { key: `${section}:${row}`, scrolled: movedRecently(sv) }, el)
             } catch (e) {
                 report('lists', e)
                 return el
             }
         }
-        renderCache.set(orig, w)
+        bySv.set(svKey, w)
     }
     return w
 }
@@ -210,7 +244,7 @@ function patchFastList(type: any) {
                 args[0],
                 {
                     ...props,
-                    renderItem: wrapFastRenderItem(props.renderItem),
+                    renderItem: wrapFastRenderItem(props.renderItem, props.scrollPosValue),
                     onScroll: typeof props.onScroll === 'function' || props.onScroll === undefined ? wrapHandler(props.onScroll, scrolled) : props.onScroll,
                     onScrollBeginDrag: wrapHandler(props.onScrollBeginDrag, begin),
                     onScrollEndDrag: wrapHandler(props.onScrollEndDrag, endDrag),

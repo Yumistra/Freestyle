@@ -82,7 +82,7 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         title: 'Subtle',
         easings: ['smooth', 'spring', 'back', 'bounce', 'elastic'],
     },
-    media: { title: 'Media', move: true },
+    media: { title: 'Media', exit: true, move: true },
     sheet: { title: 'Sheets' },
     menu: { title: 'Menus', exit: true, move: true },
     alert: {
@@ -288,7 +288,9 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
     const info = MODULES[id]
     const set = (patch: Partial<ModuleSettings>) => onChange({ ...value, ...patch })
     const custom = value.effect !== 'default' && value.effect !== 'none' && !info.native
-    const showSpeed = custom && !(id === 'backdrop' && value.effect !== 'solid')
+    // 사진·동영상은 열기를 디스코드대로 두고 닫기만 바꿀 수도 있다
+    const mediaExit = id === 'media' && !!value.exit && value.exit !== 'default'
+    const showSpeed = (custom || mediaExit) && !(id === 'backdrop' && value.effect !== 'solid')
     const easingItems = info.easings ? EASINGS.filter(e => info.easings!.includes(e.id)) : [...EASINGS, { id: 'custom', label: 'Custom' }]
     const easingValue = isCustomEasing(value.easing) && !info.easings ? 'custom' : value.easing
 
@@ -317,7 +319,7 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                     <Field label="Effect">
                         <Chips items={EFFECTS[id]} value={value.effect} onChange={effect => set({ effect })} />
                     </Field>
-                    {info.exit && custom && (
+                    {info.exit && (custom || id === 'media') && (
                         <Field label="Exit">
                             <Chips items={exitChoices(id)} value={value.exit ?? SAME_ID} onChange={exit => set({ exit })} />
                         </Field>
@@ -347,12 +349,12 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                         </Field>
                     )}
                     {showSpeed && !info.noEasing && easingValue === 'custom' && <EasingEditor value={value.easing} onChange={easing => set({ easing })} />}
-                    {info.move && custom && (
+                    {info.move && (custom || mediaExit) && (
                         <Field label="Direction">
                             <Chips items={DIRECTIONS} value={value.direction ?? 'auto'} onChange={direction => set({ direction })} />
                         </Field>
                     )}
-                    {info.move && custom && (
+                    {info.move && (custom || mediaExit) && (
                         <Field label="Origin">
                             <Chips items={POSITIONS} value={value.position ?? 'auto'} onChange={position => set({ position })} />
                         </Field>
