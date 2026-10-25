@@ -151,24 +151,40 @@ const NOTICE =
 
 // 사진·동영상 보기: 디스코드는 entranceAnimationDriver(0 → 1)로 누른 자리에서 커지게 그린다.
 // Zoom 은 그 모습 그대로(속도·곡선은 patchMediaTiming 이 바꿈), 나머지는 제자리에서 우리 효과로
+// 다른 플러그인이 이 워클릿을 감쌌을 수 있으니(사진 돌리기 등) 원래 워클릿(BA_orig)을 그대로 살린다:
+//  - 다 열린 뒤엔 원래 워클릿 결과를 그대로 쓴다
+//  - 움직이는 동안엔 원래 결과의 회전만 가져와서 붙인다 (닫을 땐 회전도 같이 풀린다)
 const MEDIA =
     'function BetterAnimationsMediaItem(){var c=this.__closure;var BA=c.BA;var k=c.entranceAnimationDriver.get();' +
     'var cl=c.BA_closing?c.BA_closing.get():0;' +
+    'var O=c.BA_orig;function orig(){if(!O){return null;}try{return O.__closure?O.call({__closure:O.__closure}):O();}catch(e){return null;}}' +
+    'if(k>=1&&!cl){var base=orig();if(base){return base;}}' +
+    'function spin(f){var r=orig();var t=r&&r.transform;var out=[];if(!t||!t.length){return out;}' +
+    'for(var i=0;i<t.length;i++){var e=t[i];var key=e.rotate!==undefined?"rotate":e.rotateZ!==undefined?"rotateZ":null;if(!key){continue;}' +
+    'var v=e[key];var n=typeof v==="number"?v:parseFloat(v);if(!isFinite(n)||n===0){continue;}' +
+    'var unit=typeof v==="string"&&v.indexOf("rad")>=0?"rad":"deg";var o={};o[key]=n*f+unit;out.push(o);}return out;}' +
     'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
     'var mode=cl?BA.modeExit:BA.mode;' +
+    'var sw=c.sourceWidth,sh=c.sourceHeight;' +
+    // 크기를 아직 모르거나 시작 자리가 없으면(0) 부드럽게 커지기 대신 디스코드 방식
+    'if(mode===2&&!(sw>0&&sh>0&&c.startWidth>0&&c.startHeight>0)){mode=1;}' +
     // 부드럽게 커지기: 크기·위치는 처음부터 원래대로 두고 변형(transform)만 움직인다 (매 프레임 다시 배치하지 않아 매끄럽다)
-    'if(mode===2){var sw=c.sourceWidth,sh=c.sourceHeight;var s0=Math.max(c.startWidth/sw,c.startHeight/sh)*c.startScale;var u=1-k;' +
+    'if(mode===2){var s0=Math.max(c.startWidth/sw,c.startHeight/sh)*(c.startScale>0?c.startScale:1);var u=1-k;' +
     'var dx=c.startTranslateX+c.startWidth/2-sw/2;var dy=c.startTranslateY+c.startHeight/2-sh/2;var s=s0+(1-s0)*k;' +
     'var br=u>0?Math.min(48,12*u/Math.max(s,0.05)):0;' +
-    'return{height:sh,width:sw,top:0,left:0,borderRadius:br,transform:[{translateX:dx*u},{translateY:dy*u},{scale:s}]};}' +
-    'if(mode===1){return{height:ip([0,1],[c.startHeight,c.sourceHeight]),width:ip([0,1],[c.startWidth,c.sourceWidth]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),transform:[{scale:ip([0,1],[c.startScale,1])}]};}' +
+    // 닫을 땐 썸네일에 닿기 전에 흐려진다 (돌려 둔 사진도 툭 바뀌지 않게)
+    'var op=cl?Math.min(1,Math.max(0,k/0.35)):1;' +
+    'var t2=[{translateX:dx*u},{translateY:dy*u},{scale:s}].concat(spin(cl?k:1));' +
+    'return{height:sh,width:sw,top:0,left:0,borderRadius:br,opacity:op,transform:t2};}' +
+    'if(mode===1){return{height:ip([0,1],[c.startHeight,sh]),width:ip([0,1],[c.startWidth,sw]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),opacity:cl?Math.min(1,Math.max(0,k/0.25)):1,transform:[{scale:ip([0,1],[c.startScale,1])}].concat(spin(cl?k:1))};}' +
     'var q=1-k;var h=cl?BA.exit:BA.hidden;' +
     'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
     "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
     "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
     "if(h.ry){t.push({rotateY:h.ry*q+'deg'});}" +
+    't=t.concat(spin(cl?k:1));' +
     'var o=h.o+(1-h.o)*k;' +
-    'return{height:c.sourceHeight,width:c.sourceWidth,top:0,left:0,borderRadius:0,opacity:o<0?0:o>1?1:o,transform:t};}'
+    'return{height:sh,width:sw,top:0,left:0,borderRadius:0,opacity:o<0?0:o>1?1:o,transform:t};}'
 
 export const CODES = { ALERT_CARD, ALERT_BACKDROP, TOAST, MENU, MENU_BACKDROP, FOLDER, NOTICE, MEDIA }
 
@@ -338,7 +354,7 @@ function swapMedia(updater: any, closure: any) {
     }
     lastDriver = driver
     status.media++
-    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null })
+    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null, BA_orig: updater })
 }
 
 /** 디스코드 워클릿이면 우리 것으로 바꾼 워클릿을, 아니면 원래 것을 돌려준다 */
