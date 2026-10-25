@@ -668,6 +668,22 @@ val betterAnimationsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
 
     start {
+        // 무엇이 되고 안 되는지 JS 의 Status 에 보여 주려고 가장 먼저 단다 (아래가 실패해도 ping 은 된다)
+        val problems = java.util.Collections.synchronizedList(ArrayList<String>())
+        var chatReady = false
+        var screens: ScreenTransitions? = null
+        var screenHook: List<XC_MethodHook.Unhook>? = null
+        registerNativeMethod("${manifest.id}.ping") {
+            mapOf(
+                "pong" to true,
+                "version" to manifest.version.toString(),
+                "screens" to (screenHook != null),
+                "played" to (screens?.played ?: 0),
+                "chat" to chatReady,
+                "problems" to problems.joinToString("\n"),
+            )
+        }
+
         // 설정은 JS 쪽 스레드에서 다시 읽고, 메인 스레드에서 쓴다
         val config = AtomicReference(loadConfig(storageDir))
 
@@ -676,13 +692,20 @@ val betterAnimationsPlugin = plugin {
             Recycler(classLoader)
         } catch (e: Throwable) {
             log.e("RecyclerView not found; list animations disabled", e)
+            problems.add("RecyclerView: $e")
             null
         }
         MediaSiblings.recycler = recycler
         val chatListView = findChatListClass(classLoader)
         if (recycler != null) log.i("RecyclerView: ${recycler.describe()} chat=${chatListView?.name}")
-        if (chatListView == null) log.w("Chat list not found; message animations disabled")
-        if (recycler != null && !recycler.canTellRemoved) log.w("ViewHolder position not found; exit animations disabled")
+        if (chatListView == null) {
+            log.w("Chat list not found; message animations disabled")
+            problems.add("Chat list not found")
+        }
+        if (recycler != null && !recycler.canTellRemoved) {
+            log.w("ViewHolder position not found; exit animations disabled")
+            problems.add("ViewHolder position not found")
+        }
         val removedHolder = { parent: ViewGroup, child: View -> recycler?.isRemoved(parent, child) == true }
         val rows = Rows({ config.get() }, removedHolder)
 
@@ -704,6 +727,7 @@ val betterAnimationsPlugin = plugin {
                 hooks.add(f())
             } catch (e: Throwable) {
                 log.e("Failed to hook $what", e)
+                problems.add("$what: $e")
             }
         }
 
@@ -813,17 +837,20 @@ val betterAnimationsPlugin = plugin {
             }
         }
         unhooks = hooks.toList()
+        chatReady = chatListView != null && hooks.size >= 2
 
         // 큰 화면 전환
         val stack = AtomicReference(loadStackConfig(storageDir))
-        val screens = ScreenTransitions { stack.get() }
-        val screenHook = try {
-            screens.hook()
+        val transitions = ScreenTransitions { stack.get() }
+        screens = transitions
+        screenHook = try {
+            transitions.hook()
         } catch (e: Throwable) {
             log.e("Failed to hook screen transitions", e)
+            problems.add("Screens: $e")
             null
         }
-        if (screenHook != null) unhooks = unhooks + screenHook else log.w("Screen transitions stay in JS")
+        screenHook?.let { unhooks = unhooks + it } ?: log.w("Screen transitions stay in JS")
 
         // JS 설정 화면이 저장한 뒤 부른다
         registerNativeMethod("${manifest.id}.reload") {
@@ -890,9 +917,6 @@ val betterAnimationsPlugin = plugin {
             }
         }
         // JS 쪽에서 네이티브 부분이 실렸는지, 화면 전환을 맡을 수 있는지 확인할 때
-        registerNativeMethod("${manifest.id}.ping") {
-            mapOf("pong" to true, "screens" to (screenHook != null), "played" to screens.played)
-        }
 
         log.i("Ready (chat=${chatListView != null}, hooks=${unhooks.size}, effect=${config.get().effect})")
     }

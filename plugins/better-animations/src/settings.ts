@@ -196,6 +196,11 @@ export const status = {
     /** 네이티브가 큰 화면 전환을 맡는지 */
     nativeScreenHook: false,
     nativePlayed: 0,
+    /** 네이티브 버전 (안 실렸으면 '') */
+    nativeVersion: '',
+    /** 채팅 목록을 찾았는지 (옛 네이티브는 null) */
+    nativeChat: null as null | boolean,
+    nativeProblems: '',
     constants: [] as string[],
     found: {} as Record<string, boolean>,
     lastError: '',

@@ -2,6 +2,10 @@ import { callNativeMethod } from '@revenge-mod/modules/native'
 import { applyMove, effectOf, exitEffectOf, normalize } from './effects'
 import { active, ready, report, setExtra, status, storedExtra } from './settings'
 
+declare const __PLUGIN_VERSION__: string
+/** 이 JS 와 같이 배포된 네이티브 버전 (다르면 디스코드를 다시 시작해야 새 네이티브가 실린다) */
+export const VERSION: string = typeof __PLUGIN_VERSION__ === 'string' ? __PLUGIN_VERSION__ : ''
+
 /**
  * 네이티브(plugin.jar) 부분: 채팅 메시지 애니메이션, 큰 화면 전환.
  * 설정은 같은 storage.json 을 읽는다. 화면 전환은 효과 정의까지 풀어서 native.stack 에 넣어 둔다.
@@ -57,6 +61,9 @@ export function pingNative() {
             status.native = true
             status.nativeScreenHook = !!r?.screens
             if (typeof r?.played === 'number') status.nativePlayed = r.played
+            status.nativeVersion = typeof r?.version === 'string' ? r.version : ''
+            status.nativeChat = typeof r?.chat === 'boolean' ? r.chat : null
+            status.nativeProblems = typeof r?.problems === 'string' ? r.problems : ''
         },
         () => {
             status.native = false

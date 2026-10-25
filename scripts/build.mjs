@@ -241,6 +241,8 @@ async function buildPlugin(name) {
         legalComments: 'none',
         charset: 'utf8',
         logLevel: 'silent',
+        // 코드에서 __PLUGIN_VERSION__ 으로 자기 버전을 안다
+        define: { __PLUGIN_VERSION__: JSON.stringify(String(manifest.version ?? '')) },
     })
     rmSync(tmp, { recursive: true, force: true })
 
