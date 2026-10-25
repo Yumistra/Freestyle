@@ -5,7 +5,7 @@ Plugins for Revenge Next.
 | Plugin | ID |
 | --- | --- |
 | Better Animations | `yumistra.better-animations` |
-| Message Actions | `yumistra.double-tap-actions` |
+| Message Actions | `yumistra.message-actions` |
 | Overlay Background | `yumistra.overlay-background` |
 | Plugin Backup | `yumistra.plugin-backup` |
 | Silent Leave | `yumistra.silent-leave` |

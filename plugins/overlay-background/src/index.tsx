@@ -30,7 +30,17 @@ interface Settings {
 const DEFAULTS: Settings = { mode: 'screen', alpha: 0 }
 
 let storage: any
-const settings = (): Settings => ({ ...DEFAULTS, ...(storage?.cache ?? {}) })
+let cachedFrom: unknown
+let cached: Settings | undefined
+/** 화면을 그릴 때마다 불리므로 저장 내용이 그대로면 만든 걸 다시 쓴다 */
+const settings = (): Settings => {
+    const saved = storage?.cache ?? {}
+    if (!cached || cachedFrom !== saved) {
+        cached = { ...DEFAULTS, ...saved }
+        cachedFrom = saved
+    }
+    return cached
+}
 
 interface ScreenProps {
     isNavigationScreen?: boolean
