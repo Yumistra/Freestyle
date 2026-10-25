@@ -9,7 +9,6 @@ Plugins for Revenge Next.
 | Overlay Background | `yumistra.overlay-background` |
 | Plugin Backup | `yumistra.plugin-backup` |
 | Silent Leave | `yumistra.silent-leave` |
-| Steal Sticker | `yumistra.steal-sticker` |
 | Toast Fix | `yumistra.toast-fix` |
 
 ## Install
