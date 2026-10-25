@@ -59,7 +59,7 @@ export const DEFAULTS: Settings = {
         modal: { effect: 'default', duration: 300, easing: 'out' },
         panel: { effect: 'default', duration: 260, easing: 'expo' },
         channelList: { effect: 'default', duration: 200, easing: 'smooth' },
-        servers: { effect: 'default', duration: 220, easing: 'out' },
+        servers: { effect: 'default', duration: 260, easing: 'out', exit: 'same', direction: 'auto', position: 'auto' },
         folder: { effect: 'drop', duration: 380, easing: 'spring', exit: 'same', direction: 'auto', position: 'auto' },
         sheet: { effect: 'default', duration: 380, easing: 'spring' },
         menu: { effect: 'pop', duration: 300, easing: 'back', exit: 'same', direction: 'auto', position: 'auto' },

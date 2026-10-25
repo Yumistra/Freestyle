@@ -80,7 +80,8 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
     },
     servers: {
         title: '서버 바꾸기',
-        description: '다른 서버나 DM을 눌러 채널 목록·DM 목록이 바뀔 때 나타나는 효과',
+        description: '다른 서버나 DM을 눌러 채널 목록·DM 목록이 바뀔 때. 원래 목록이 나가는 효과와 새 목록이 나타나는 효과 ("올라가며 바뀌기": 원래 목록은 위로 사라지고 새 목록은 아래에서 올라와요)',
+        exit: true,
         move: true,
     },
     folder: { title: '서버 폴더', description: '서버 목록에서 폴더를 열고 닫을 때 서버 아이콘이 나타나는 모습과 펼쳐지는 속도', exit: true, move: true },

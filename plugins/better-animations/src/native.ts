@@ -9,9 +9,9 @@ import { active, ready, report, setExtra, status, storedExtra } from './settings
 
 export const NATIVE_ID = 'yumistra.better-animations'
 
-function call(name: string) {
+function call(name: string, args: unknown[] = []) {
     try {
-        return Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.${name}`, []))
+        return Promise.resolve((callNativeMethod as any)(`${NATIVE_ID}.${name}`, args))
     } catch (e) {
         return Promise.reject(e)
     }
@@ -62,5 +62,17 @@ export function pingNative() {
             status.native = false
             status.nativeScreenHook = false
         },
+    )
+}
+
+/**
+ * 서버 바꾸기: 지금 보이는 목록을 찍어 그 위에 덮고, 나가는 효과로 치운다.
+ * 덮은 뒤에 'ok' 가 온다 (그다음에 새 목록으로 바꿔야 옛 목록이 찍힘)
+ */
+export function nativeGuildOut(opts: unknown): Promise<string> {
+    if (status.native !== true) return Promise.resolve('nonative')
+    return call('guildOut', [JSON.stringify(opts)]).then(
+        (r: any) => String(r),
+        () => 'error',
     )
 }
