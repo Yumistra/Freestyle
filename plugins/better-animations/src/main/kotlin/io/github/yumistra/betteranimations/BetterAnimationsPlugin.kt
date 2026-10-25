@@ -827,6 +827,25 @@ val betterAnimationsPlugin = plugin {
                 }
             }
         }
+        // 사진·동영상: 같은 메시지의 다른 사진 썸네일 자리
+        registerNativeAsyncMethod("${manifest.id}.mediaSiblings") { args ->
+            val o = try {
+                JSONObject(args.getOrNull(0) as? String ?: "{}")
+            } catch (e: Throwable) {
+                JSONObject()
+            }
+            val activity = withTimeoutOrNull(100L) {
+                suspendCancellableCoroutine<android.app.Activity> { cont -> withAppActivity { if (cont.isActive) cont.resume(it) } }
+            } ?: return@registerNativeAsyncMethod ""
+            withContext(Dispatchers.Main) {
+                try {
+                    MediaSiblings.find(activity, o.optDouble("x"), o.optDouble("y"), o.optDouble("w"), o.optDouble("h"))?.toString() ?: ""
+                } catch (e: Throwable) {
+                    log.e("Failed to find media thumbnails", e)
+                    ""
+                }
+            }
+        }
         // 사진·동영상 닫기: 다른 플러그인이 건 회전·확대를 같이 되돌린다
         registerNativeAsyncMethod("${manifest.id}.mediaUnwind") { args ->
             val opts = try {

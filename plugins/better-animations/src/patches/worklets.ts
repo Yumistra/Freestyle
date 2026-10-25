@@ -5,7 +5,7 @@ import { instead } from '@revenge-mod/patcher'
 import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
 import { Dimensions } from 'react-native'
 import { applyMove, easingFrom, effectOf, exitEffectOf, normalize, springFor, type Effect, type ModuleKey } from '../effects'
-import { nativeMediaUnwind } from '../native'
+import { nativeMediaSiblings, nativeMediaUnwind, type MediaRect } from '../native'
 import { active, report, settings, status, version, type ModuleSettings } from '../settings'
 
 /**
@@ -167,21 +167,25 @@ const MEDIA =
     'var v=e[key];var n=typeof v==="number"?v:parseFloat(v);if(!isFinite(n)||n===0){continue;}' +
     'var unit=typeof v==="string"&&v.indexOf("rad")>=0?"rad":"deg";var o={};o[key]=n*f+unit;out.push(o);}return out;}' +
     'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
-    'var mode=cl?BA.modeExit:BA.mode;var away=false;' +
-    // 처음 누른 사진이 아닌 것(옆으로 넘긴 사진)은 그 썸네일 자리를 모르니, 제자리에서 작아지며 사라진다
-    'if(cl&&!c.BA_isOrigin&&(mode===1||mode===2)){mode=0;away=true;}' +
-    'var sw=c.sourceWidth,sh=c.sourceHeight;' +
+    'var mode=cl?BA.modeExit:BA.mode;var away=false;var sw=c.sourceWidth,sh=c.sourceHeight;' +
+    'var sW=c.startWidth,sH=c.startHeight,sX=c.startTranslateX,sY=c.startTranslateY,sS=c.startScale;' +
+    // 옆으로 넘긴 사진: 디스코드는 처음 누른 썸네일 자리로 계산해 두므로, 찾아 둔 그 사진의 썸네일 자리로 옮긴다
+    'if(cl&&!c.BA_isOrigin&&(mode===1||mode===2)){var T0=c.BA_targets?c.BA_targets.get():null;var R=T0&&T0.list?T0.list[c.BA_index]:null;var O=T0?T0.o:null;' +
+    'if(R&&O&&O.w>0&&O.h>0&&R.w>0&&R.h>0){if(T0.cover){sW=R.w;sH=R.h;sX+=R.x-O.x;sY+=R.y-O.y;}' +
+    'else{sS=sS*R.w/O.w;sX+=R.x-O.x+(R.w-O.w)/2;sY+=R.y-O.y+(R.h-O.h)/2;}}' +
+    // 못 찾았으면 제자리에서 작아지며 사라진다
+    'else{mode=0;away=true;}}' +
     // 크기를 아직 모르거나 시작 자리가 없으면(0) 부드럽게 커지기 대신 디스코드 방식
-    'if(mode===2&&!(sw>0&&sh>0&&c.startWidth>0&&c.startHeight>0)){mode=1;}' +
+    'if(mode===2&&!(sw>0&&sh>0&&sW>0&&sH>0)){mode=1;}' +
     // 부드럽게 커지기: 크기·위치는 처음부터 원래대로 두고 변형(transform)만 움직인다 (매 프레임 다시 배치하지 않아 매끄럽다)
-    'if(mode===2){var s0=Math.max(c.startWidth/sw,c.startHeight/sh)*(c.startScale>0?c.startScale:1);var u=1-k;' +
-    'var dx=c.startTranslateX+c.startWidth/2-sw/2;var dy=c.startTranslateY+c.startHeight/2-sh/2;var s=s0+(1-s0)*k;' +
+    'if(mode===2){var s0=Math.max(sW/sw,sH/sh)*(sS>0?sS:1);var u=1-k;' +
+    'var dx=sX+sW/2-sw/2;var dy=sY+sH/2-sh/2;var s=s0+(1-s0)*k;' +
     'var br=u>0?Math.min(48,12*u/Math.max(s,0.05)):0;' +
     // 닫을 땐 썸네일에 닿기 전에 흐려진다 (돌려 둔 사진도 툭 바뀌지 않게)
     'var op=cl?Math.min(1,Math.max(0,k/0.35)):1;' +
     'var t2=[{translateX:dx*u},{translateY:dy*u},{scale:s}].concat(spin(cl?k:1));' +
     'return{height:sh,width:sw,top:0,left:0,borderRadius:br,opacity:op,transform:t2};}' +
-    'if(mode===1){return{height:ip([0,1],[c.startHeight,sh]),width:ip([0,1],[c.startWidth,sw]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),opacity:cl?Math.min(1,Math.max(0,k/0.25)):1,transform:[{scale:ip([0,1],[c.startScale,1])}].concat(spin(cl?k:1))};}' +
+    'if(mode===1){return{height:ip([0,1],[sH,sh]),width:ip([0,1],[sW,sw]),top:ip([0,1],[sY,0]),left:ip([0,1],[sX,0]),borderRadius:ip([0,0.25],[16,0]),opacity:cl?Math.min(1,Math.max(0,k/0.25)):1,transform:[{scale:ip([0,1],[sS,1])}].concat(spin(cl?k:1))};}' +
     'var q=1-k;var h=away?BA.away:cl?BA.exit:BA.hidden;' +
     'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
     "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
@@ -337,13 +341,48 @@ const presenterWrappers = new WeakMap<Function, Function>()
 /** 처음 누른 사진의 번호, 지금 그리는 사진의 번호 (썸네일 자리는 처음 누른 사진 것만 안다) */
 let initialIndex: number | undefined
 let renderingIndex: number | undefined
+/** 열 때 찾아 둔 사진별 썸네일 자리 (공유 값: {o, cover, list[번호]}) */
+let mediaTargets: any
+
+function toRect(x: unknown, y: unknown, w: unknown, h: unknown): MediaRect | undefined {
+    const r = { x: Number(x), y: Number(y), w: Number(w), h: Number(h) }
+    return [r.x, r.y, r.w, r.h].every(Number.isFinite) && r.w > 0 && r.h > 0 ? r : undefined
+}
+
+/** 처음 누른 썸네일 자리로 같은 묶음의 다른 썸네일 자리를 찾아 둔다 */
+function findMediaTargets(opts: any, index: number) {
+    mediaTargets = undefined
+    const m = mediaSettings()
+    if (!m || !mediaExitEffect(m) || !ensureReanimated()) return
+    const sv = makeMutable(null)
+    if (!sv) return
+    mediaTargets = sv
+    const count = Array.isArray(opts?.initialSources) ? opts.initialSources.length : 0
+    const got = (o: MediaRect | undefined, cover: boolean) => {
+        if (!o) return
+        nativeMediaSiblings(o).then(r => {
+            if (!r || mediaTargets !== sv) return
+            const list: Array<MediaRect | null> = []
+            const n = Math.max(count, index + r.rects.length - r.index)
+            for (let i = 0; i < n; i++) list.push(r.rects[i - index + r.index] ?? null)
+            setShared(sv, { o, cover, list })
+        })
+    }
+    const v = opts?.originViewOrOriginLayout
+    try {
+        if (typeof v?.measureInWindow === 'function') v.measureInWindow((x: number, y: number, w: number, h: number) => got(toRect(x, y, w, h), false))
+        else if (v) got(toRect(v.x, v.y, v.width, v.height), v.resizeMode === 'cover')
+    } catch (e) {
+        report('media', e)
+    }
+}
 
 /** 열린 보기의 진행도(공유 값) → 닫는 중 표시(우리 공유 값) */
 const closingOf = new WeakMap<object, any>()
 let lastDriver: any
 let discordTiming: ((...a: any[]) => any) | undefined
 
-function makeMutable(v: number) {
+function makeMutable(v: unknown) {
     const mk = Rea?.makeMutable
     return typeof mk === 'function' ? mk(v) : undefined
 }
@@ -368,7 +407,15 @@ function swapMedia(updater: any, closure: any) {
     lastDriver = driver
     status.media++
     const isOrigin = renderingIndex === undefined || initialIndex === undefined || renderingIndex === initialIndex
-    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null, BA_orig: updater, BA_isOrigin: isOrigin })
+    return makeWorklet(MEDIA, {
+        ...closure,
+        BA: mediaConfig(m),
+        BA_closing: closing ?? null,
+        BA_orig: updater,
+        BA_isOrigin: isOrigin,
+        BA_targets: isOrigin ? null : (mediaTargets ?? null),
+        BA_index: renderingIndex ?? 0,
+    })
 }
 
 /** 디스코드 워클릿이면 우리 것으로 바꾼 워클릿을, 아니면 원래 것을 돌려준다 */
@@ -451,6 +498,11 @@ export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void
                     instead(mod, 'openMediaModal', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
                         const i = args[0]?.initialIndex
                         initialIndex = typeof i === 'number' ? i : 0
+                        try {
+                            findMediaTargets(args[0], initialIndex)
+                        } catch (e) {
+                            report('media', e)
+                        }
                         return orig.apply(this, args)
                     }),
                 )
