@@ -25,10 +25,9 @@ import kotlin.coroutines.resume
 /**
  * 서버 바꾸기: 옛 채널 목록이 나가는 효과.
  *
- * JS 가 서버를 바꾸는 액션을 붙잡고 부른다. 지금 화면에 보이는 목록(JS 가 nativeID 를 붙인 Animated.View)을
- * PixelCopy 로 찍고, 그 그림을 부모 뷰의 오버레이에 덮은 뒤 "ok" 를 돌려준다.
- * 그다음 JS 가 액션을 보내면 새 목록은 그림 밑에서 나타나고, 그림은 나가는 효과로 움직이며 사라진다.
- * (화면을 그대로 찍는 거라 하드웨어 비트맵·이미지도 그대로 나온다)
+ * JS 가 서버를 바꾸는 액션을 보내기 직전에 부른다. 지금 화면에 보이는 목록(JS 가 nativeID 를 붙인 Animated.View)을
+ * 그대로 그려 찍고(안 되면 PixelCopy), 그 그림을 부모 뷰의 오버레이에 덮는다.
+ * JS 가 새 목록을 그리는 건 그보다 늦으므로 새 목록은 그림 밑에서 나타나고, 그림은 나가는 효과로 움직이며 사라진다.
  */
 internal object GuildOut {
     private val main = Handler(Looper.getMainLooper())
@@ -56,7 +55,6 @@ internal object GuildOut {
 
     /** 메인 스레드에서 부른다 */
     suspend fun play(activity: Activity, o: JSONObject): String {
-        if (Build.VERSION.SDK_INT < 26) return "old"
         if (tagKey == 0) tagKey = activity.resources.getIdentifier("view_tag_native_id", "id", activity.packageName)
         if (tagKey == 0) return "notag"
         val arr = o.optJSONArray("ids") ?: return "noview"
@@ -75,19 +73,37 @@ internal object GuildOut {
         } catch (e: Throwable) {
             return "nomem"
         }
-        val result = withTimeoutOrNull(250L) {
-            suspendCancellableCoroutine<Int> { cont ->
-                try {
-                    PixelCopy.request(window, src, bitmap, { r -> if (cont.isActive) cont.resume(r) }, main)
-                } catch (e: Throwable) {
-                    if (cont.isActive) cont.resume(-1)
+        // 먼저 그 자리에서 바로 그려 본다 (새 목록이 그려지기 전에 확실히 옛 모습).
+        // 하드웨어 비트맵 이미지가 있으면 소프트웨어로 못 그리므로 화면을 복사한다 (한두 프레임 늦을 수 있음)
+        var ok = try {
+            val c = Canvas(bitmap)
+            c.translate((loc[0] - src.left).toFloat(), (loc[1] - src.top).toFloat())
+            view.draw(c)
+            true
+        } catch (e: Throwable) {
+            bitmap.eraseColor(0)
+            false
+        }
+        if (!ok) {
+            if (Build.VERSION.SDK_INT < 26) {
+                bitmap.recycle()
+                return "old"
+            }
+            val result = withTimeoutOrNull(250L) {
+                suspendCancellableCoroutine<Int> { cont ->
+                    try {
+                        PixelCopy.request(window, src, bitmap, { r -> if (cont.isActive) cont.resume(r) }, main)
+                    } catch (e: Throwable) {
+                        if (cont.isActive) cont.resume(-1)
+                    }
                 }
             }
-        }
-        val deadline = o.optLong("deadline", 0L)
-        if (result != PixelCopy.SUCCESS || (deadline > 0 && System.currentTimeMillis() > deadline) || !view.isAttachedToWindow) {
-            bitmap.recycle()
-            return if (result == PixelCopy.SUCCESS) "late" else "copy$result"
+            val deadline = o.optLong("deadline", 0L)
+            if (result != PixelCopy.SUCCESS || (deadline > 0 && System.currentTimeMillis() > deadline) || !view.isAttachedToWindow) {
+                bitmap.recycle()
+                return if (result == PixelCopy.SUCCESS) "late" else "copy$result"
+            }
+            ok = true
         }
 
         // 부모 좌표에서 뷰 자리 (화면 밖으로 잘린 만큼 옮김)
