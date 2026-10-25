@@ -82,6 +82,7 @@ const MODULES: Record<ModuleKey, ModuleInfo> = {
         title: 'Subtle',
         easings: ['smooth', 'spring', 'back', 'bounce', 'elastic'],
     },
+    media: { title: 'Media', move: true },
     sheet: { title: 'Sheets' },
     menu: { title: 'Menus', exit: true, move: true },
     alert: {
@@ -428,6 +429,7 @@ function StatusRows() {
         ['Backdrops', `${status.backdrops}`],
         ['Toasts', `${status.toasts}`],
         ['Notifications', `${status.notices}`],
+        ['Media', `${ok(f.media)} · ${status.media}`],
         ['Folders', `${status.folders}`],
         ['Lists', `${Object.keys(f).filter(k => k.startsWith('list:')).map(k => k.slice(5)).join(', ') || 'missing'} · ${status.listCells}`],
         ['Channel list', `${ok(f.layout)} · ${ok(f.channelRows)} · ${ok(f.servers)} · ${status.layouts}`],

@@ -174,6 +174,57 @@ const settle = () => {
     until = 0
 }
 
+/** Discord FastList (서버 목록 등): renderItem(section, row, …) */
+function wrapFastRenderItem(orig: any) {
+    if (typeof orig !== 'function') return orig
+    let w = renderCache.get(orig)
+    if (!w) {
+        w = function (this: unknown, section: any, row: any) {
+            const el = orig.apply(this, arguments as any)
+            try {
+                if (!el || !active('lists')) return el
+                return createElement(CaskCell, { key: `${section}:${row}` }, el)
+            } catch (e) {
+                report('lists', e)
+                return el
+            }
+        }
+        renderCache.set(orig, w)
+    }
+    return w
+}
+
+/** 스크롤 이벤트가 오는 동안은 스크롤 중으로 본다 (FastList 는 끌기 시작·끝 이벤트를 안 넘겨줄 수 있어서) */
+const scrolled = () => {
+    until = Math.max(until, Date.now() + 250)
+}
+
+function patchFastList(type: any) {
+    if (!type) return
+    status.found['list:FastList'] = true
+    return beforeJSX(type, (args: any[]) => {
+        try {
+            const props = args[1]
+            if (!props?.renderItem || !active('lists')) return args as any
+            return [
+                args[0],
+                {
+                    ...props,
+                    renderItem: wrapFastRenderItem(props.renderItem),
+                    onScroll: typeof props.onScroll === 'function' || props.onScroll === undefined ? wrapHandler(props.onScroll, scrolled) : props.onScroll,
+                    onScrollBeginDrag: wrapHandler(props.onScrollBeginDrag, begin),
+                    onScrollEndDrag: wrapHandler(props.onScrollEndDrag, endDrag),
+                    onMomentumScrollEnd: wrapHandler(props.onMomentumScrollEnd, settle),
+                },
+                ...args.slice(2),
+            ] as any
+        } catch (e) {
+            report('lists', e)
+            return args as any
+        }
+    })
+}
+
 function patchListType(type: any, name: string) {
     if (!type) return
     status.found[`list:${name}`] = true
@@ -218,4 +269,17 @@ export function patchLists(cleanup: (...fns: Array<() => unknown>) => void) {
             ) as any,
         )
     }
+    cleanup(
+        getModules(
+            withProps('AnimatedFastList', 'FastListComputer') as any,
+            (mod: any) => {
+                const type = mod?.default
+                if (!type || done.has(type)) return
+                done.add(type)
+                const u = patchFastList(type)
+                if (u) cleanup(u)
+            },
+            { max: 1 } as any,
+        ) as any,
+    )
 }

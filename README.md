@@ -5,9 +5,7 @@ Plugins for Revenge Next.
 | Plugin | ID |
 | --- | --- |
 | Better Animations | `yumistra.better-animations` |
-| Bot Client | `yumistra.bot-client` |
-| Double Tap Actions | `yumistra.double-tap-actions` |
-| Edit Before Delete | `yumistra.edit-before-delete` |
+| Message Actions | `yumistra.double-tap-actions` |
 | Overlay Background | `yumistra.overlay-background` |
 | Plugin Backup | `yumistra.plugin-backup` |
 | Silent Leave | `yumistra.silent-leave` |

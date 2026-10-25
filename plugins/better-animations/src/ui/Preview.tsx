@@ -352,6 +352,32 @@ export default function Preview({ module, settings }: { module: ModuleKey; setti
                 </Animated.View>
             </>
         )
+    } else if (module === 'media') {
+        // 채팅의 사진 → 전체 화면 보기
+        const thumb = { left: 46, top: 40, width: 70, height: 52 }
+        const full = { left: 10, top: 14, width: W - 20, height: HEIGHT - 28 }
+        const zoom = shown.effect === 'zoom' || instant
+        const [h] = hFor(full.width, full.height)
+        const card = zoom
+            ? {
+                  left: lerp(p, thumb.left, full.left),
+                  top: lerp(p, thumb.top, full.top),
+                  width: lerp(p, thumb.width, full.width),
+                  height: lerp(p, thumb.height, full.height),
+                  borderRadius: lerp(p, 10, 4),
+              }
+            : [full, { borderRadius: 4 }, moving(p, undefined, h, h, W, HEIGHT)]
+        body = (
+            <>
+                <View style={{ position: 'absolute', left: 14, top: 14, flexDirection: 'row', gap: 8 }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: c.raised }} />
+                    <View style={{ height: 8, width: 80, marginTop: 6, borderRadius: 4, backgroundColor: c.muted }} />
+                </View>
+                <View style={{ position: 'absolute', ...thumb, borderRadius: 10, backgroundColor: c.brandSoft }} />
+                <Animated.View style={[fill, { backgroundColor: '#000', opacity: lerp(p, 0, 0.9) }]} />
+                <Animated.View style={[{ position: 'absolute', backgroundColor: c.brand, overflow: 'hidden' }, card]} />
+            </>
+        )
     } else if (module === 'alert' || module === 'backdrop') {
         // 배경 미리보기는 확인창 기본 모습 + 배경 진하기
         const dim = module === 'backdrop' ? (shown.effect === 'none' ? 0 : shown.effect === 'solid' ? (shown.amount ?? 0.6) * 0.5 : 0.5) : 0.5

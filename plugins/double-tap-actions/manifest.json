@@ -1,11 +1,11 @@
 {
 	"format": 1,
 	"id": "yumistra.double-tap-actions",
-	"name": "Double Tap Actions",
+	"name": "Message Actions",
 	"description": "Quick actions for your own messages.",
 	"author": "Yumistra",
 	"icon": "PencilIcon",
-	"version": "1.4.0",
+	"version": "1.5.0",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}
