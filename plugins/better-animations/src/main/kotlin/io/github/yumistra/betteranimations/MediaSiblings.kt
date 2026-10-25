@@ -19,20 +19,21 @@ internal object MediaSiblings {
 
     private fun isAccessories(v: View) = v.javaClass.name.endsWith("MessageAccessoriesView")
 
+    /** 플러그인이 시작할 때 넣어 준다 */
+    @Volatile
+    var recycler: Recycler? = null
+
     private fun isRecycler(v: View): Boolean {
+        recycler?.let { return it.rv.isInstance(v) }
         var c: Class<*>? = v.javaClass
         while (c != null) {
-            if (c.name == "androidx.recyclerview.widget.RecyclerView") return true
+            if (c.name == Recycler.NAME) return true
             c = c.superclass
         }
         return false
     }
 
-    private fun adapterPosition(rv: View, child: View): Int = try {
-        rv.javaClass.getMethod("getChildAdapterPosition", View::class.java).invoke(rv, child) as Int
-    } catch (e: Throwable) {
-        -1
-    }
+    private fun adapterPosition(rv: View, child: View): Int = recycler?.adapterPosition(rv, child) ?: -1
 
     /** x, y, w, h: 처음 누른 썸네일 (창 좌표, dp). 결과: {index, rects:[{x,y,w,h}]} 또는 null */
     fun find(activity: Activity, x: Double, y: Double, w: Double, h: Double): JSONObject? {

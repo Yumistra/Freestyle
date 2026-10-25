@@ -32,9 +32,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.lang.ref.WeakReference
-import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
-import java.lang.reflect.Proxy
 import java.util.WeakHashMap
 import kotlin.coroutines.resume
 import kotlin.math.abs
@@ -55,18 +53,17 @@ import kotlin.math.sqrt
  *  - 그 줄 아래에 빈 자리를 만들어 밑의 메시지를 민다 (RecyclerView 의 장식 여백 = getItemDecorInsetsForChild)
  *  - 그 자리에 디스코드 버튼(크기·글꼴·색·눌림 애니메이션을 디스코드와 같게)을 그린다 (RecyclerView 오버레이)
  *  - 누른 버튼의 id 를 돌려준다.
- * 앱의 androidx 클래스는 상속할 수 없어서(플러그인 로더가 달라서) 인터페이스는 Proxy, 나머지는 리플렉션으로 쓴다.
+ * 디스코드는 버전에 따라 안쪽 이름(androidx 포함)을 줄여 버리므로, 이름 대신 모양으로 찾거나(Recycler)
+ * 안드로이드 기본 메서드(onInterceptTouchEvent/onTouchEvent)를 잡는다.
  */
 
-private const val RECYCLER_VIEW = "androidx.recyclerview.widget.RecyclerView"
-private const val CHAT_LIST_VIEW = "com.discord.chat.presentation.list.ChatListView"
 private const val ACCESSORIES_VIEW = "com.discord.chat.presentation.message.MessageAccessoriesView"
-private const val ITEM_TOUCH_LISTENER = "androidx.recyclerview.widget.RecyclerView\$OnItemTouchListener"
 private const val FONT_MANAGER = "com.facebook.react.common.assets.ReactFontManager"
 /** 이보다 오래전에 닿은 줄은 쓰지 않는다 */
 private const val TOUCH_TTL = 4000L
-/** 메시지를 옆으로 당길 때 원과 아이콘을 그리는 곳 */
-private const val SWIPE_HELPER = "com.discord.chat.presentation.list.SwipeHelper"
+/** 메시지를 옆으로 당길 때 보이는 연필 아이콘 (SwipeHelper 가 이 리소스로 editIcon 을 만든다) */
+private const val SWIPE_EDIT_ICON = "ic_swipe_edit"
+private const val SWIPE_REPLY_ICON = "ic_swipe_reply"
 /** 버튼으로 바꿨을 때 당기는 동안 보일 아이콘 (디스코드 ⋯ 아이콘) */
 private const val BUTTONS_ICON = "design_components_icon_native_redesign_generated_images_morehorizontalicon"
 
@@ -156,54 +153,35 @@ private class Colors(val bg: Int, val bgActive: Int, val border: Int, val border
     }
 }
 
-/** RecyclerView 메서드 (리플렉션) */
-private class Rv(cl: ClassLoader) {
-    private val rv = cl.loadClass(RECYCLER_VIEW)
-    private val listenerClass: Class<*> = cl.loadClass(ITEM_TOUCH_LISTENER)
-    private val childAdapterPosition: Method = rv.getMethod("getChildAdapterPosition", View::class.java)
-    private val adapter: Method = rv.getMethod("getAdapter")
-    private val invalidateDecor: Method = rv.getMethod("invalidateItemDecorations")
-    private val addTouch: Method = rv.getMethod("addOnItemTouchListener", listenerClass)
-    private val removeTouch: Method = rv.getMethod("removeOnItemTouchListener", listenerClass)
-    private var itemId: Method? = null
-
-    fun idOf(list: View, child: View): Long? = try {
-        val pos = childAdapterPosition.invoke(list, child) as Int
-        if (pos < 0) {
-            null
-        } else {
-            val a = adapter.invoke(list)
-            val m = itemId ?: a!!.javaClass.getMethod("getItemId", Int::class.javaPrimitiveType).also { itemId = it }
-            val id = m.invoke(a, pos) as Long
-            if (id == -1L) -1000L - pos else id
-        }
+/** RecyclerView 쪽 일 (모양으로 찾은 Recycler 위에서) */
+private class Rv(private val r: Recycler) {
+    private val invalidateDecor: Method? = try {
+        r.rv.getMethod("invalidateItemDecorations")
     } catch (e: Throwable) {
         null
     }
 
-    private val scrollState: Method? = try {
-        rv.getMethod("getScrollState")
-    } catch (e: Throwable) {
-        null
+    /** 항목 id (어댑터가 고정 id 를 쓴다. 없으면 위치로) */
+    fun idOf(list: View, child: View): Long? {
+        val pos = r.adapterPosition(list, child) ?: return null
+        if (pos < 0) return null
+        val id = r.itemId(list, child) ?: -1L
+        return if (id == -1L) -1000L - pos else id
     }
 
     /** 0 = 멈춤 */
-    fun scrollState(list: View): Int = try {
-        scrollState?.invoke(list) as? Int ?: 0
-    } catch (e: Throwable) {
-        0
-    }
+    fun scrollState(list: View): Int = r.scrollState(list)
 
     /**
      * 여백을 다시 재고 바로 다시 배치한다.
      * RN 화면 안이라 requestLayout 이 위로 올라가지 않아서(ReactViewGroup 이 막음) 직접 measure/layout 해야 한다
-     * (디스코드도 목록을 바꿀 때 measureAndLayout 으로 이렇게 한다)
+     * (디스코드도 목록을 바꿀 때 measureAndLayout 으로 이렇게 한다).
+     * 장식 여백은 매번 getItemDecorInsetsForChild 를 거치므로 invalidateItemDecorations 가 없어도 된다
      */
     fun relayout(list: View) {
         try {
-            invalidateDecor.invoke(list)
+            invalidateDecor?.invoke(list)
         } catch (e: Throwable) {
-            list.requestLayout()
         }
         if (list.width <= 0 || list.height <= 0) return
         try {
@@ -212,17 +190,6 @@ private class Rv(cl: ClassLoader) {
                 View.MeasureSpec.makeMeasureSpec(list.height, View.MeasureSpec.EXACTLY),
             )
             list.layout(list.left, list.top, list.right, list.bottom)
-        } catch (e: Throwable) {
-        }
-    }
-
-    fun touchListener(handler: InvocationHandler): Any =
-        Proxy.newProxyInstance(listenerClass.classLoader, arrayOf(listenerClass), handler)
-
-    fun addTouchListener(list: View, l: Any) = addTouch.invoke(list, l)
-    fun removeTouchListener(list: View, l: Any) {
-        try {
-            removeTouch.invoke(list, l)
         } catch (e: Throwable) {
         }
     }
@@ -371,7 +338,8 @@ private class Bar(
     private var downY = 0f
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
     private val clip = Rect()
-    private val touch: Any
+    /** 버튼을 누른 손가락을 떼거나 취소될 때까지 목록 대신 받는다 */
+    private var capturing = false
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         update()
         true
@@ -416,21 +384,6 @@ private class Bar(
         container.pivotY = 0f
         list.overlay.add(container)
 
-        touch = rv.touchListener { proxy, method, args ->
-            when (method.name) {
-                "onInterceptTouchEvent" -> intercept(args!![1] as MotionEvent)
-                "onTouchEvent" -> {
-                    onTouch(args!![1] as MotionEvent)
-                    null
-                }
-                "onRequestDisallowInterceptTouchEvent" -> null
-                "equals" -> proxy === args?.getOrNull(0)
-                "hashCode" -> System.identityHashCode(proxy)
-                "toString" -> "MessageActions.Bar"
-                else -> null
-            }
-        }
-        rv.addTouchListener(list, touch)
         list.viewTreeObserver.addOnPreDrawListener(preDraw)
         list.addOnAttachStateChangeListener(detach)
         animateTo(1f)
@@ -557,9 +510,11 @@ private class Bar(
         return null
     }
 
-    private fun intercept(e: MotionEvent): Boolean {
+    /** 목록의 onInterceptTouchEvent 앞에서. true 면 목록 대신 우리가 받는다 */
+    fun intercept(e: MotionEvent): Boolean {
+        if (e.actionMasked != MotionEvent.ACTION_DOWN) return capturing
+        capturing = false
         if (closing) return false
-        if (e.actionMasked != MotionEvent.ACTION_DOWN) return pressed != null
         val b = buttonAt(e.x, e.y)
         if (b == null) {
             // 다른 곳을 누르면 닫힌다 (누른 건 그대로 전달)
@@ -570,6 +525,15 @@ private class Bar(
         downX = e.x
         downY = e.y
         b.press(true)
+        capturing = true
+        return true
+    }
+
+    /** 목록의 onTouchEvent 앞에서. true 면 목록에 넘기지 않는다 */
+    fun touch(e: MotionEvent): Boolean {
+        if (!capturing) return false
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) capturing = false
+        onTouch(e)
         return true
     }
 
@@ -634,7 +598,7 @@ private class Bar(
             list.overlay.remove(container)
         } catch (e: Throwable) {
         }
-        rv.removeTouchListener(list, touch)
+        capturing = false
         try {
             list.viewTreeObserver.removeOnPreDrawListener(preDraw)
         } catch (e: Throwable) {
@@ -649,10 +613,91 @@ private class Bar(
 
 private class Touched(val list: WeakReference<ViewGroup>, val row: WeakReference<View>, val at: Long)
 
+/**
+ * 당기기 아이콘을 그리는 SwipeHelper. 이름(SwipeHelper, editIcon, drawContextArea)이 줄여져 있어도
+ * 채팅 목록 → ItemTouchHelper(장식 목록 안) → 콜백 으로 찾아가서, 필드 모양(Drawable 둘 이상 + Context)으로 알아본다.
+ * 연필 아이콘 필드는 ic_swipe_edit 리소스와 같은 그림인 것으로 고른다.
+ */
+private class SwipeIcon(val cls: Class<*>, val field: java.lang.reflect.Field, val context: java.lang.reflect.Field?)
+
+private fun allFields(c: Class<*>): List<java.lang.reflect.Field> {
+    val out = ArrayList<java.lang.reflect.Field>()
+    var k: Class<*>? = c
+    while (k != null && k != Any::class.java && k != View::class.java && k != ViewGroup::class.java) {
+        for (f in k.declaredFields) if (!java.lang.reflect.Modifier.isStatic(f.modifiers)) out.add(f)
+        k = k.superclass
+    }
+    return out
+}
+
+private fun looksLikeSwipeHelper(c: Class<*>): Boolean {
+    val fs = c.declaredFields.filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
+    return fs.count { it.type == android.graphics.drawable.Drawable::class.java } >= 2 && fs.any { it.type == Context::class.java }
+}
+
+private fun findSwipeIcon(list: ViewGroup, rvClass: Class<*>): Pair<Any, SwipeIcon>? {
+    val seen = java.util.IdentityHashMap<Any, Boolean>()
+    // 목록 필드 중 ArrayList (장식·터치 리스너 목록) 안의 객체들 → 그 필드들
+    for (f in allFields(rvClass)) {
+        if (!java.util.List::class.java.isAssignableFrom(f.type)) continue
+        val items = try {
+            f.isAccessible = true
+            (f.get(list) as? List<*>)?.toList()
+        } catch (e: Throwable) {
+            null
+        } ?: continue
+        for (item in items) {
+            if (item == null || seen.put(item, true) != null) continue
+            for (g in allFields(item.javaClass)) {
+                if (g.type.isPrimitive || g.type == String::class.java) continue
+                val v = try {
+                    g.isAccessible = true
+                    g.get(item)
+                } catch (e: Throwable) {
+                    null
+                } ?: continue
+                if (v is View || !looksLikeSwipeHelper(v.javaClass)) continue
+                val icon = pickEditIcon(list.context, v) ?: continue
+                return v to icon
+            }
+        }
+    }
+    return null
+}
+
+private fun pickEditIcon(ctx: Context, helper: Any): SwipeIcon? {
+    val c = helper.javaClass
+    val drawables = c.declaredFields.filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == android.graphics.drawable.Drawable::class.java }
+    drawables.forEach { it.isAccessible = true }
+    val contextField = c.declaredFields.firstOrNull { !java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == Context::class.java }?.apply { isAccessible = true }
+    // 이름이 남아 있으면 그대로
+    drawables.firstOrNull { it.name == "editIcon" }?.let { return SwipeIcon(c, it, contextField) }
+    fun stateOf(name: String): android.graphics.drawable.Drawable.ConstantState? {
+        val id = ctx.resources.getIdentifier(name, "drawable", ctx.packageName)
+        if (id == 0) return null
+        return try {
+            ctx.getDrawable(id)?.constantState
+        } catch (e: Throwable) {
+            null
+        }
+    }
+    fun valueOf(f: java.lang.reflect.Field) = f.get(helper) as? android.graphics.drawable.Drawable
+    stateOf(SWIPE_EDIT_ICON)?.let { edit ->
+        drawables.firstOrNull { valueOf(it)?.constantState === edit }?.let { return SwipeIcon(c, it, contextField) }
+    }
+    // 답장 아이콘이 아닌 나머지 하나
+    stateOf(SWIPE_REPLY_ICON)?.let { reply ->
+        val others = drawables.filter { valueOf(it)?.constantState !== reply }
+        if (drawables.size == 2 && others.size == 1) return SwipeIcon(c, others[0], contextField)
+    }
+    return null
+}
+
 @Suppress("UNUSED")
 val messageActionsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
     val originalIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
+    var swipeIcon: SwipeIcon? = null
 
     start {
         var touched: Touched? = null
@@ -661,31 +706,126 @@ val messageActionsPlugin = plugin {
         val added = WeakHashMap<View, IntArray>()
 
         val cl = classLoader
-        val recyclerView = XposedHelpers.findClass(RECYCLER_VIEW, cl)
-        val chatListView = XposedHelpers.findClass(CHAT_LIST_VIEW, cl)
-        val rv = Rv(cl)
+        // 디스코드 버전마다 안쪽 이름이 바뀔 수 있다. 못 찾으면 JS 가 다른 방식(창)으로 보여 주게 "norow" 만 돌려준다
+        val recycler = try {
+            Recycler(cl)
+        } catch (e: Throwable) {
+            null
+        }
+        val chatListView = findChatListClass(cl)
+        if (recycler == null || chatListView == null) {
+            log.w("Chat list not found (recycler=${recycler != null}, chat=${chatListView != null}); inline buttons disabled")
+            registerNativeAsyncMethod("${manifest.id}.showActions") { "norow" }
+            registerNativeMethod("${manifest.id}.setSwipeButtons") { true }
+            registerNativeMethod("${manifest.id}.ping") { "pong" }
+            return@start
+        }
+        log.i("RecyclerView: ${recycler.describe()} chat=${chatListView.name}")
+        val rv = Rv(recycler)
+        val rvClass = recycler.rv
 
+        val fonts = HashMap<String, Typeface?>()
         var fontGetter: Method? = null
         var fontManager: Any? = null
         fun typeface(ctx: Context, family: String?): Typeface? {
             if (family.isNullOrEmpty()) return null
-            return try {
-                if (fontGetter == null) {
-                    val c = cl.loadClass(FONT_MANAGER)
-                    fontManager = c.getMethod("getInstance").invoke(null)
-                    fontGetter = c.getMethod("getTypeface", String::class.java, Int::class.javaPrimitiveType, AssetManager::class.java)
+            if (fonts.containsKey(family)) return fonts[family]
+            var tf: Typeface? = null
+            // RN 과 같은 곳 (assets/fonts/<이름>.ttf|.otf). 안 되면 RN 의 글꼴 관리자 (이름이 남아 있으면)
+            for (ext in listOf(".ttf", ".otf")) {
+                if (tf != null) break
+                tf = try {
+                    Typeface.createFromAsset(ctx.assets, "fonts/$family$ext")
+                } catch (e: Throwable) {
+                    null
                 }
-                fontGetter!!.invoke(fontManager, family, Typeface.NORMAL, ctx.assets) as? Typeface
+            }
+            if (tf == null) {
+                tf = try {
+                    if (fontGetter == null) {
+                        val c = cl.loadClass(FONT_MANAGER)
+                        fontManager = c.getMethod("getInstance").invoke(null)
+                        fontGetter = c.getMethod("getTypeface", String::class.java, Int::class.javaPrimitiveType, AssetManager::class.java)
+                    }
+                    fontGetter!!.invoke(fontManager, family, Typeface.NORMAL, ctx.assets) as? Typeface
+                } catch (e: Throwable) {
+                    log.w("font $family: $e")
+                    null
+                }
+            }
+            fonts[family] = tf
+            return tf
+        }
+
+        // 세게 당기기가 "버튼"이면 당길 때 연필 대신 ⋯ 아이콘
+        var swipeButtons = false
+        val buttonIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
+        var swipeSearched = false
+        val hooks = ArrayList<XC_MethodHook.Unhook>()
+
+        fun swapIcon(h: Any) {
+            val si = swipeIcon ?: return
+            if (!si.cls.isInstance(h)) return
+            try {
+                val current = si.field.get(h) as? android.graphics.drawable.Drawable ?: return
+                if (swipeButtons) {
+                    var icon = buttonIcons[h]
+                    if (icon == null) {
+                        val ctx = si.context?.get(h) as? Context ?: return
+                        val id = ctx.resources.getIdentifier(BUTTONS_ICON, "drawable", ctx.packageName)
+                        if (id == 0) return
+                        icon = ctx.getDrawable(id)?.mutate() ?: return
+                        buttonIcons[h] = icon
+                    }
+                    if (current !== icon) {
+                        originalIcons[h] = current
+                        si.field.set(h, icon)
+                    }
+                } else {
+                    val orig = originalIcons.remove(h) ?: return
+                    si.field.set(h, orig)
+                }
             } catch (e: Throwable) {
-                log.w("font $family: $e")
-                null
             }
         }
 
-        unhooks = listOf(
-            // 메시지를 누르기 시작한 줄을 기억
+        /** 처음 채팅 목록을 만질 때 한 번 SwipeHelper 를 찾아, 캔버스에 그리는 메서드들 앞에서 아이콘을 바꾼다 */
+        fun findSwipe(list: ViewGroup) {
+            if (swipeSearched) return
+            swipeSearched = true
+            try {
+                val (helper, si) = findSwipeIcon(list, rvClass) ?: run {
+                    log.w("Swipe icon not found")
+                    return
+                }
+                swipeIcon = si
+                var n = 0
+                for (m in si.cls.declaredMethods) {
+                    if (m.parameterTypes.isEmpty() || m.parameterTypes[0] != android.graphics.Canvas::class.java) continue
+                    hooks.add(
+                        de.robv.android.xposed.XposedBridge.hookMethod(
+                            m,
+                            object : XC_MethodHook() {
+                                override fun beforeHookedMethod(param: MethodHookParam) {
+                                    param.thisObject?.let(::swapIcon)
+                                }
+                            },
+                        ),
+                    )
+                    n++
+                }
+                unhooks = unhooks + hooks.takeLast(n)
+                swapIcon(helper)
+                log.i("Swipe icon: ${si.cls.name}.${si.field.name} ($n draw methods)")
+            } catch (e: Throwable) {
+                log.w("Swipe icon not hooked: $e")
+            }
+        }
+
+        // 메시지를 누르기 시작한 줄을 기억하고, 버튼 줄이 떠 있으면 그 버튼 누르기를 먼저 받는다
+        hooks.add(
             XposedHelpers.findAndHookMethod(
-                recyclerView,
+                rvClass,
                 "onInterceptTouchEvent",
                 MotionEvent::class.java,
                 object : XC_MethodHook() {
@@ -693,35 +833,72 @@ val messageActionsPlugin = plugin {
                         val list = param.thisObject as? ViewGroup ?: return
                         if (!chatListView.isInstance(list)) return
                         val ev = param.args[0] as? MotionEvent ?: return
+                        val bar = active
+                        if (bar != null && bar.list === list) {
+                            try {
+                                if (bar.intercept(ev)) {
+                                    param.result = true
+                                    return
+                                }
+                            } catch (e: Throwable) {
+                                log.e("touch: $e")
+                            }
+                        }
                         if (ev.actionMasked != MotionEvent.ACTION_DOWN) return
+                        findSwipe(list)
                         val row = childUnder(list, ev.x, ev.y) ?: return
                         touched = Touched(WeakReference(list), WeakReference(row), SystemClock.uptimeMillis())
                     }
                 },
             ),
-            // 버튼 줄 자리만큼 그 메시지 아래 여백을 더한다 → RecyclerView 가 밑의 메시지를 민다
+        )
+        hooks.add(
             XposedHelpers.findAndHookMethod(
-                recyclerView,
-                "getItemDecorInsetsForChild",
-                View::class.java,
+                rvClass,
+                "onTouchEvent",
+                MotionEvent::class.java,
                 object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val bar = active
-                        if (bar == null && added.isEmpty()) return
-                        val list = param.thisObject as? View ?: return
-                        if (!chatListView.isInstance(list)) return
-                        val rect = param.result as? Rect ?: return
-                        val child = param.args[0] as? View ?: return
-                        val prev = added[child]
-                        val want = if (bar != null && bar.list === list && bar.height > 0 && bar.matches(child)) bar.height else 0
-                        if (prev == null && want == 0) return
-                        val base = if (prev != null && rect.bottom == prev[0]) prev[0] - prev[1] else rect.bottom
-                        rect.bottom = base + want
-                        if (want == 0) added.remove(child) else added[child] = intArrayOf(rect.bottom, want)
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val bar = active ?: return
+                        if (bar.list !== param.thisObject) return
+                        val ev = param.args[0] as? MotionEvent ?: return
+                        try {
+                            if (bar.touch(ev)) param.result = true
+                        } catch (e: Throwable) {
+                            log.e("touch: $e")
+                        }
                     }
                 },
             ),
         )
+        // 버튼 줄 자리만큼 그 메시지 아래 여백을 더한다 → RecyclerView 가 밑의 메시지를 민다
+        val decor = recycler.decorInsets
+        if (decor == null) {
+            log.w("Item decoration insets not found; buttons will overlap the messages below")
+        } else {
+            hooks.add(
+                de.robv.android.xposed.XposedBridge.hookMethod(
+                    decor,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val bar = active
+                            if (bar == null && added.isEmpty()) return
+                            val list = param.thisObject as? View ?: return
+                            if (!chatListView.isInstance(list)) return
+                            val rect = param.result as? Rect ?: return
+                            val child = param.args[0] as? View ?: return
+                            val prev = added[child]
+                            val want = if (bar != null && bar.list === list && bar.height > 0 && bar.matches(child)) bar.height else 0
+                            if (prev == null && want == 0) return
+                            val base = if (prev != null && rect.bottom == prev[0]) prev[0] - prev[1] else rect.bottom
+                            rect.bottom = base + want
+                            if (want == 0) added.remove(child) else added[child] = intArrayOf(rect.bottom, want)
+                        }
+                    },
+                ),
+            )
+        }
+        unhooks = hooks.toList()
 
         /**
          * args[0]: JSON {buttons:[{id,label,icon,colors:{bg,bgActive,border,borderActive,fg},confirm?:{label,colors}}], font:{family,size}, radius, inset}
@@ -763,45 +940,6 @@ val messageActionsPlugin = plugin {
             }
         }
 
-        // 세게 당기기가 "버튼"이면 당길 때 연필 대신 ⋯ 아이콘
-        var swipeButtons = false
-        val buttonIcons = WeakHashMap<Any, android.graphics.drawable.Drawable>()
-        try {
-            val helper = XposedHelpers.findClass(SWIPE_HELPER, cl)
-            unhooks = unhooks + XposedHelpers.findAndHookMethod(
-                helper,
-                "drawContextArea",
-                android.graphics.Canvas::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val h = param.thisObject ?: return
-                        try {
-                            val current = XposedHelpers.getObjectField(h, "editIcon") as? android.graphics.drawable.Drawable ?: return
-                            if (swipeButtons) {
-                                var icon = buttonIcons[h]
-                                if (icon == null) {
-                                    val ctx = XposedHelpers.getObjectField(h, "context") as? Context ?: return
-                                    val id = ctx.resources.getIdentifier(BUTTONS_ICON, "drawable", ctx.packageName)
-                                    if (id == 0) return
-                                    icon = ctx.getDrawable(id)?.mutate() ?: return
-                                    buttonIcons[h] = icon
-                                }
-                                if (current !== icon) {
-                                    originalIcons[h] = current
-                                    XposedHelpers.setObjectField(h, "editIcon", icon)
-                                }
-                            } else {
-                                val orig = originalIcons.remove(h) ?: return
-                                XposedHelpers.setObjectField(h, "editIcon", orig)
-                            }
-                        } catch (e: Throwable) {
-                        }
-                    }
-                },
-            )
-        } catch (e: Throwable) {
-            log.w("Swipe icon not hooked: $e")
-        }
         registerNativeMethod("${manifest.id}.setSwipeButtons") { args ->
             swipeButtons = args.getOrNull(0) == true
             true
@@ -812,9 +950,10 @@ val messageActionsPlugin = plugin {
     }
 
     stop {
+        val si = swipeIcon
         for ((h, icon) in originalIcons) {
             try {
-                XposedHelpers.setObjectField(h, "editIcon", icon)
+                si?.field?.set(h, icon)
             } catch (e: Throwable) {
             }
         }

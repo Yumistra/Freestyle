@@ -4,9 +4,10 @@ import android.content.Context
 import android.graphics.Camera
 import android.view.View
 import android.view.animation.Animation
+import android.view.animation.AnimationSet
+import android.view.animation.AnimationUtils
 import android.view.animation.Interpolator
 import android.view.animation.Transformation
-import dalvik.system.DexFile
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import org.json.JSONObject
@@ -16,7 +17,7 @@ import java.io.File
  * 큰 화면(react-native-screens 네이티브 스택) 전환을 "화면 전환" 효과로 바꾼다.
  *
  * RNS 는 화면을 열고 닫을 때 Fragment 에 setCustomAnimations(애니메이션 리소스)를 걸고,
- * Fragment 는 onCreateAnimation(…, nextAnim) 에서 null 이면 그 리소스를 쓴다.
+ * Fragment 는 그 리소스를 AnimationUtils.loadAnimation 으로 읽는다.
  * JS 쪽이 효과를 줄 화면의 stackAnimation 을 ios_from_right 로 두면, 리소스 이름으로 역할을 알 수 있다:
  *   foreground_open  = 새로 열리는 화면      (숨은 상태 → 원래)
  *   background_open  = 그 아래로 깔리는 화면  (원래 → under)
@@ -130,71 +131,46 @@ internal fun poseMatrix(from: Pose, to: Pose, t: Float, w: Float, h: Float, pivo
     return l(from.o, to.o).coerceIn(0f, 1f)
 }
 
-/** RNS 의 ScreenStackFragment 클래스 (이름이 줄여져 있을 수 있어 찾아본다) */
-private fun findStackFragment(cl: ClassLoader): Class<*>? {
-    val wrapper = try {
-        cl.loadClass("com.swmansion.rnscreens.ScreenStackFragmentWrapper")
-    } catch (e: Throwable) {
-        null
-    }
-    fun ok(c: Class<*>) = !c.isInterface && (wrapper == null || wrapper.isAssignableFrom(c)) && c.declaredMethods.any { it.name == "onCreateAnimation" }
-    for (name in listOf("com.swmansion.rnscreens.ScreenStackFragment", "com.swmansion.rnscreens.c0")) {
-        try {
-            val c = cl.loadClass(name)
-            if (ok(c)) return c
-        } catch (e: Throwable) {
-        }
-    }
-    if (wrapper == null) return null
-    for (name in dexClassNames(cl)) {
-        if (!name.startsWith("com.swmansion.rnscreens.") || name.contains('$')) continue
-        try {
-            val c = cl.loadClass(name)
-            if (ok(c)) return c
-        } catch (e: Throwable) {
-        }
-    }
-    return null
-}
-
-@Suppress("DEPRECATION")
-private fun dexClassNames(cl: ClassLoader): List<String> {
-    val out = ArrayList<String>()
-    try {
-        val pathList = XposedHelpers.getObjectField(cl, "pathList")
-        val elements = XposedHelpers.getObjectField(pathList, "dexElements") as Array<*>
-        for (e in elements) {
-            val dex = try {
-                XposedHelpers.getObjectField(e, "dexFile") as? DexFile
-            } catch (t: Throwable) {
-                null
-            } ?: continue
-            val entries = dex.entries()
-            while (entries.hasMoreElements()) out.add(entries.nextElement())
-        }
-    } catch (e: Throwable) {
-    }
-    return out
-}
-
-internal class ScreenTransitions(
-    private val classLoader: ClassLoader,
-    private val context: () -> Context?,
-    private val config: () -> StackConfig?,
-) {
+internal class ScreenTransitions(private val config: () -> StackConfig?) {
     var played = 0
         private set
+
+    /**
+     * Fragment 는 화면을 열고 닫을 때 setCustomAnimations 로 받은 애니메이션 리소스를 AnimationUtils.loadAnimation 으로 읽는다
+     * (RNS 의 onCreateAnimation/onCreateAnimator 가 null 일 때. 시트가 아닌 화면은 늘 그렇다).
+     * 디스코드 안쪽 이름(ScreenStackFragment, Fragment.onCreateAnimation …)은 버전마다 줄여지지만
+     * 안드로이드 기본 메서드와 리소스 이름(rns_ios_from_right_*)은 그대로라 그쪽을 잡는다.
+     */
+    private fun hookAnimation(): XC_MethodHook.Unhook = XposedHelpers.findAndHookMethod(
+        AnimationUtils::class.java,
+        "loadAnimation",
+        Context::class.java,
+        Integer.TYPE,
+        object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                try {
+                    val ctx = param.args[0] as? Context ?: return
+                    animationFor(ctx, param.args[1] as Int)?.let {
+                        param.result = it
+                        played++
+                    }
+                } catch (e: Throwable) {
+                    // 실패하면 RNS 기본 애니메이션 그대로
+                }
+            }
+        },
+    )
 
     /** 움직이는 동안만 화면을 GPU 레이어로 그려서 버벅이지 않게 */
     private fun hookLayer(): XC_MethodHook.Unhook? = try {
         XposedHelpers.findAndHookMethod(
-            "com.swmansion.rnscreens.stack.views.ScreensCoordinatorLayout",
-            classLoader,
+            View::class.java,
             "startAnimation",
             Animation::class.java,
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    val anim = param.args[0] as? PoseAnimation ?: return
+                    val anim = param.args[0] as? Animation ?: return
+                    if (!isOurs(anim)) return
                     val view = param.thisObject as? View ?: return
                     try {
                         if (view.layerType != View.LAYER_TYPE_HARDWARE) {
@@ -210,40 +186,20 @@ internal class ScreenTransitions(
         null
     }
 
-    fun hook(): List<XC_MethodHook.Unhook>? {
-        val main = hookAnimation() ?: return null
-        return listOfNotNull(main, hookLayer())
-    }
+    /** 우리 애니메이션 (Fragment 가 AnimationSet 으로 한 번 감싸기도 한다) */
+    private fun isOurs(anim: Animation): Boolean =
+        anim is PoseAnimation || (anim is AnimationSet && anim.animations.any { it is PoseAnimation })
 
-    private fun hookAnimation(): XC_MethodHook.Unhook? {
-        val cls = findStackFragment(classLoader) ?: return null
-        return XposedHelpers.findAndHookMethod(
-            cls,
-            "onCreateAnimation",
-            Integer.TYPE,
-            java.lang.Boolean.TYPE,
-            Integer.TYPE,
-            object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (param.result != null) return
-                    try {
-                        animationFor(param.args[2] as Int)?.let {
-                            param.result = it
-                            played++
-                        }
-                    } catch (e: Throwable) {
-                        // 실패하면 RNS 기본 애니메이션 그대로
-                    }
-                }
-            },
-        )
-    }
+    fun hook(): List<XC_MethodHook.Unhook> = listOfNotNull(hookAnimation(), hookLayer())
 
-    private fun animationFor(nextAnim: Int): Animation? {
-        if (nextAnim == 0) return null
+    private fun animationFor(ctx: Context, id: Int): Animation? {
+        if (id == 0) return null
         val c = config() ?: return null
-        val ctx = context() ?: return null
-        val name = ctx.resources.getResourceEntryName(nextAnim)
+        val name = try {
+            ctx.resources.getResourceEntryName(id)
+        } catch (e: Throwable) {
+            return null
+        }
         if (!name.startsWith(MARKER)) return null
         val (from, to) = when (name.removePrefix(MARKER)) {
             "foreground_open" -> c.hidden to Pose.NORMAL
