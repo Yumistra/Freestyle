@@ -508,7 +508,7 @@ function StatusRows() {
         ['Notifications', `${status.notices}`],
         ['Media', `${ok(f.media)} · ${status.media}`],
         ['Folders', `${status.folders}`],
-        ['Buttons', `${status.presses}`],
+        ['Buttons', `${ok(f.press)} · ${status.presses}`],
         ['Lists', `${Object.keys(f).filter(k => k.startsWith('list:')).map(k => k.slice(5)).join(', ') || 'missing'} · ${status.listCells}`],
         ['Channel list', `${ok(f.layout)} · ${ok(f.channelRows)} · ${ok(f.servers)} · ${status.layouts}`],
         ['Constants', status.constants.length ? status.constants.join(', ') : 'missing'],
