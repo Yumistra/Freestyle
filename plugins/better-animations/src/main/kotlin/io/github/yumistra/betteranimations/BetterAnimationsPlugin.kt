@@ -79,6 +79,8 @@ private data class Config(
     val onOpen: Boolean = true,
     val shift: Boolean = true,
     val shiftDuration: Long = 200L,
+    /** 채팅 끝에서 iOS 처럼 튕기기 */
+    val bounce: Boolean = true,
 ) {
     val enterOn get() = enabled && (Cask.styleOf(effect) != null || hiddenFor(effect) != null)
     val exitEffect get() = if (exit.isEmpty() || exit == "same") effect else exit
@@ -105,6 +107,7 @@ private fun loadConfig(dir: File): Config {
             onOpen = m.optBoolean("onOpen", d.onOpen),
             shift = m.optBoolean("shift", d.shift),
             shiftDuration = m.optLong("shiftDuration", d.shiftDuration).coerceIn(50L, 2000L),
+            bounce = m.optBoolean("bounce", d.bounce),
         )
     } catch (e: Throwable) {
         return d
@@ -717,6 +720,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
 @Suppress("UNUSED")
 val betterAnimationsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
+    var bounceRef: Bounce? = null
 
     start {
         // 무엇이 되고 안 되는지 JS 의 Status 에 보여 주려고 가장 먼저 단다 (아래가 실패해도 ping 은 된다)
@@ -868,6 +872,7 @@ val betterAnimationsPlugin = plugin {
                                 log.e("Failed to watch list", e)
                             }
                             val parent = chat(list) ?: return
+                            bounceRef?.register(parent)
                             try {
                                 rows.beforeLayout(parent)
                             } catch (e: Throwable) {
@@ -885,6 +890,70 @@ val betterAnimationsPlugin = plugin {
                         }
                     },
                 )
+            }
+        }
+        // 채팅 끝에서 iOS 처럼 튕기기
+        val bounce = if (recycler != null && chatListView != null) Bounce(recycler) { config.get().let { it.enabled && it.bounce } } else null
+        bounceRef = bounce
+        if (bounce != null && bounce.supported) {
+            val rvClass = recycler!!.rv
+            val touch = object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val list = chat(param.thisObject) ?: return
+                    val ev = param.args[0] as? android.view.MotionEvent ?: return
+                    try {
+                        bounce.register(list)
+                        val shift = bounce.before(list, ev)
+                        if (shift != 0f) param.setObjectExtra("baShift", shift)
+                    } catch (e: Throwable) {
+                        log.e("Bounce touch failed", e)
+                    }
+                }
+
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val shift = param.getObjectExtra("baShift") as? Float ?: return
+                    val ev = param.args[0] as? android.view.MotionEvent ?: return
+                    bounce.restore(ev, shift)
+                }
+            }
+            tryHook("onInterceptTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onInterceptTouchEvent", android.view.MotionEvent::class.java, touch) }
+            tryHook("onTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onTouchEvent", android.view.MotionEvent::class.java, touch) }
+            // 채팅 목록의 늘어나는 효과는 끄고, 끝에 부딪힌 속도로 튕긴다
+            val edge = android.widget.EdgeEffect::class.java
+            fun owner(param: XC_MethodHook.MethodHookParam): View? {
+                if (!config.get().let { it.enabled && it.bounce }) return null
+                return bounce.ownerOf(param.thisObject as? android.widget.EdgeEffect ?: return null)
+            }
+            fun skip(name: String, vararg types: Class<*>, result: (XC_MethodHook.MethodHookParam, View) -> Any?) {
+                tryHook("EdgeEffect.$name") {
+                    XposedHelpers.findAndHookMethod(edge, name, *types, object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val list = try {
+                                owner(param)
+                            } catch (e: Throwable) {
+                                null
+                            } ?: return
+                            param.result = result(param, list)
+                        }
+                    })
+                }
+            }
+            skip("onAbsorb", Integer.TYPE) { p, list ->
+                try {
+                    bounce.absorb(list, p.args[0] as Int)
+                } catch (e: Throwable) {
+                    log.e("Bounce absorb failed", e)
+                }
+                null
+            }
+            skip("onPull", java.lang.Float.TYPE) { _, _ -> null }
+            skip("onPull", java.lang.Float.TYPE, java.lang.Float.TYPE) { _, _ -> null }
+            skip("onRelease") { _, _ -> null }
+            skip("draw", android.graphics.Canvas::class.java) { _, _ -> false }
+            skip("isFinished") { _, _ -> true }
+            if (Build.VERSION.SDK_INT >= 31) {
+                skip("onPullDistance", java.lang.Float.TYPE, java.lang.Float.TYPE) { _, _ -> 0f }
+                skip("getDistance") { _, _ -> 0f }
             }
         }
         unhooks = hooks.toList()
@@ -973,6 +1042,11 @@ val betterAnimationsPlugin = plugin {
     }
 
     stop {
+        try {
+            bounceRef?.reset()
+        } catch (e: Throwable) {
+        }
+        bounceRef = null
         for (unhook in unhooks) unhook.unhook()
         unhooks = emptyList()
     }

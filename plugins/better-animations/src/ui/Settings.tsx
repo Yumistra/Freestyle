@@ -466,6 +466,7 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                             onCommit={shiftDuration => set({ shiftDuration })}
                         />
                     )}
+                    {id === 'messages' && <SwitchRow label="Bounce" value={value.bounce !== false} onChange={bounce => set({ bounce })} />}
                     {info.test && enabled && <Button text="Test" variant="secondary" size="sm" onPress={info.test} />}
                 </View>
             )}
