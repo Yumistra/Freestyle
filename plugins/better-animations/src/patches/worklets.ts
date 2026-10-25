@@ -1,8 +1,10 @@
 import { getModules, lookupModules } from '@revenge-mod/modules/finders'
 import { withProps } from '@revenge-mod/modules/finders/filters'
+import { getModuleWithImportedPath } from '@revenge-mod/discord/utils/modules/finders'
 import { instead } from '@revenge-mod/patcher'
+import { beforeJSX } from '@revenge-mod/react/jsx-runtime'
 import { Dimensions } from 'react-native'
-import { applyMove, easingFrom, effectOf, exitEffectOf, springFor, type Effect, type ModuleKey } from '../effects'
+import { applyMove, easingFrom, effectOf, exitEffectOf, normalize, springFor, type Effect, type ModuleKey } from '../effects'
 import { nativeMediaUnwind } from '../native'
 import { active, report, settings, status, version, type ModuleSettings } from '../settings'
 
@@ -165,7 +167,9 @@ const MEDIA =
     'var v=e[key];var n=typeof v==="number"?v:parseFloat(v);if(!isFinite(n)||n===0){continue;}' +
     'var unit=typeof v==="string"&&v.indexOf("rad")>=0?"rad":"deg";var o={};o[key]=n*f+unit;out.push(o);}return out;}' +
     'function ip(a,b){return c.interpolate(k,a,b,c.Extrapolation.CLAMP);}' +
-    'var mode=cl?BA.modeExit:BA.mode;' +
+    'var mode=cl?BA.modeExit:BA.mode;var away=false;' +
+    // 처음 누른 사진이 아닌 것(옆으로 넘긴 사진)은 그 썸네일 자리를 모르니, 제자리에서 작아지며 사라진다
+    'if(cl&&!c.BA_isOrigin&&(mode===1||mode===2)){mode=0;away=true;}' +
     'var sw=c.sourceWidth,sh=c.sourceHeight;' +
     // 크기를 아직 모르거나 시작 자리가 없으면(0) 부드럽게 커지기 대신 디스코드 방식
     'if(mode===2&&!(sw>0&&sh>0&&c.startWidth>0&&c.startHeight>0)){mode=1;}' +
@@ -178,7 +182,7 @@ const MEDIA =
     'var t2=[{translateX:dx*u},{translateY:dy*u},{scale:s}].concat(spin(cl?k:1));' +
     'return{height:sh,width:sw,top:0,left:0,borderRadius:br,opacity:op,transform:t2};}' +
     'if(mode===1){return{height:ip([0,1],[c.startHeight,sh]),width:ip([0,1],[c.startWidth,sw]),top:ip([0,1],[c.startTranslateY,0]),left:ip([0,1],[c.startTranslateX,0]),borderRadius:ip([0,0.25],[16,0]),opacity:cl?Math.min(1,Math.max(0,k/0.25)):1,transform:[{scale:ip([0,1],[c.startScale,1])}].concat(spin(cl?k:1))};}' +
-    'var q=1-k;var h=cl?BA.exit:BA.hidden;' +
+    'var q=1-k;var h=away?BA.away:cl?BA.exit:BA.hidden;' +
     'var t=[{perspective:800},{translateX:(h.tx+h.txW*BA.W)*q},{translateY:(h.ty+h.tyH*BA.H)*q},{scale:h.s+(1-h.s)*k},{scaleY:h.sy+(1-h.sy)*k}];' +
     "if(h.r){t.push({rotate:h.r*q+'deg'});}" +
     "if(h.rx){t.push({rotateX:h.rx*q+'deg'});}" +
@@ -312,6 +316,7 @@ function mediaConfig(m: ModuleSettings) {
         exit: e ? applyMove(e.hidden, move, W.width, W.height) : hidden,
         // 1 = 디스코드처럼 누른 자리에서 (크기를 바꿔 가며), 2 = 부드럽게 커지기, 0 = 효과
         mode: !enterCustom || m.effect === 'zoom' ? 1 : m.effect === 'grow' ? 2 : 0,
+        away: normalize({ o: 0, s: 0.9 }),
         modeExit: e?.id === 'zoom' ? 1 : e?.id === 'grow' ? 2 : 0,
         W: W.width,
         H: W.height,
@@ -325,6 +330,13 @@ const mediaSettings = () => {
     const s = settings()
     return s.enabled ? s.modules.media : undefined
 }
+
+const PRESENTER_PATH = 'modules/media_viewer/native/components/MediaViewerItemPresenter.tsx'
+const presenterWrappers = new WeakMap<Function, Function>()
+
+/** 처음 누른 사진의 번호, 지금 그리는 사진의 번호 (썸네일 자리는 처음 누른 사진 것만 안다) */
+let initialIndex: number | undefined
+let renderingIndex: number | undefined
 
 /** 열린 보기의 진행도(공유 값) → 닫는 중 표시(우리 공유 값) */
 const closingOf = new WeakMap<object, any>()
@@ -355,7 +367,8 @@ function swapMedia(updater: any, closure: any) {
     }
     lastDriver = driver
     status.media++
-    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null, BA_orig: updater })
+    const isOrigin = renderingIndex === undefined || initialIndex === undefined || renderingIndex === initialIndex
+    return makeWorklet(MEDIA, { ...closure, BA: mediaConfig(m), BA_closing: closing ?? null, BA_orig: updater, BA_isOrigin: isOrigin })
 }
 
 /** 디스코드 워클릿이면 우리 것으로 바꾼 워클릿을, 아니면 원래 것을 돌려준다 */
@@ -428,6 +441,41 @@ export function ensureReanimated() {
  * 디스코드 래퍼 withTiming(값, 설정, 'respect-motion-settings', 끝 콜백) 의 끝 콜백 클로저로 알아본다
  */
 export function patchMediaTiming(cleanup: (...fns: Array<() => unknown>) => void) {
+    // 몇 번째 사진을 눌러 열었는지
+    cleanup(
+        getModules(
+            withProps('openMediaModal') as any,
+            (mod: any) => {
+                if (typeof mod?.openMediaModal !== 'function') return
+                cleanup(
+                    instead(mod, 'openMediaModal', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
+                        const i = args[0]?.initialIndex
+                        initialIndex = typeof i === 'number' ? i : 0
+                        return orig.apply(this, args)
+                    }),
+                )
+            },
+            { max: 1 } as any,
+        ) as any,
+    )
+    // 사진 한 장을 그리는 동안 그 번호를 알아 둔다 (그 안에서 useAnimatedStyle → swapMedia 가 불린다)
+    cleanup(
+        getModuleWithImportedPath(PRESENTER_PATH, (exports: any) => {
+            const Orig = exports?.default
+            if (typeof Orig !== 'function' || presenterWrappers.has(Orig)) return
+            const Wrapped = function BetterAnimationsMediaPresenter(props: any) {
+                const prev = renderingIndex
+                renderingIndex = typeof props?.index === 'number' ? props.index : undefined
+                try {
+                    return Orig(props)
+                } finally {
+                    renderingIndex = prev
+                }
+            }
+            presenterWrappers.set(Orig, Wrapped)
+            cleanup(beforeJSX(Orig, (args: any[]) => [Wrapped, ...args.slice(1)] as any))
+        }) as any,
+    )
     const done = new Set<any>()
     cleanup(
         getModules(
