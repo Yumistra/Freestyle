@@ -112,9 +112,9 @@ function previewOf(message: any) {
     const text = String(message?.content ?? '').trim()
     if (text) return text.length > 300 ? `${text.slice(0, 300)}…` : text
     const files = message?.attachments?.length ?? 0
-    if (files) return `(첨부 파일 ${files}개)`
-    if (message?.stickerItems?.length || message?.sticker_items?.length) return '(스티커)'
-    return '(내용 없음)'
+    if (files) return `(${files} attachment${files === 1 ? '' : 's'})`
+    if (message?.stickerItems?.length || message?.sticker_items?.length) return '(sticker)'
+    return '(empty)'
 }
 
 /** 우리가 부르는 handleEdit 는 가로채지 않는다 */
@@ -137,7 +137,7 @@ function edit(handlers: any, message: any, channel: any, chatInputRef = handlers
         messageActions.startEditMessageRecord(channel.id, message)
         chatInputRef?.current?.openSystemKeyboard?.()
     } catch (e: any) {
-        toast(`수정을 시작하지 못했어요: ${e?.message ?? e}`)
+        toast(`Couldn't edit: ${e?.message ?? e}`)
     }
 }
 
@@ -146,7 +146,7 @@ async function remove(message: any, channel: any) {
     try {
         await messageActions.deleteMessage(channel.id, message.id, false)
     } catch (e: any) {
-        toast(`삭제하지 못했어요${e?.body?.message ? `: ${e.body.message}` : ''}`)
+        toast(`Couldn't delete${e?.body?.message ? `: ${e.body.message}` : ''}`)
     }
 }
 
@@ -181,7 +181,7 @@ function openActions(handlers: any, message: any, channel: any, chatInputRef?: a
     AlertActionCreators.openAlert(
         `double-tap-actions-${seq++}`,
         <AlertModal
-            title="메시지"
+            title="Message"
             content={
                 ChatItemPreview ? (
                     // 네이티브 메시지 뷰는 너비가 정해져야 글자를 그린다 (가운데 정렬 부모 안에서 너비 0이 되면 빈칸)
@@ -194,9 +194,9 @@ function openActions(handlers: any, message: any, channel: any, chatInputRef?: a
             }
             actions={
                 <>
-                    {editable && <AlertActionButton text="수정" variant="primary" onPress={() => edit(handlers, message, channel, chatInputRef ?? handlers?.params?.chatInputRef, source, extra)} />}
-                    <AlertActionButton text="삭제" variant="destructive" onPress={() => remove(message, channel)} />
-                    <AlertActionButton text="취소" variant="secondary" />
+                    {editable && <AlertActionButton text="Edit" variant="primary" onPress={() => edit(handlers, message, channel, chatInputRef ?? handlers?.params?.chatInputRef, source, extra)} />}
+                    <AlertActionButton text="Delete" variant="destructive" onPress={() => remove(message, channel)} />
+                    <AlertActionButton text="Cancel" variant="secondary" />
                 </>
             }
         />,
@@ -280,13 +280,13 @@ const ICON = (name: string) => `design_components_icon_native_redesign_generated
 /** 네이티브가 없거나 메시지 줄을 못 찾으면 null */
 async function showButtons(message: any): Promise<string | null> {
     const buttons: any[] = []
-    if (editableOf(message)) buttons.push({ id: 'edit', label: '수정', icon: ICON('pencilicon'), colors: variantColors('secondary') })
+    if (editableOf(message)) buttons.push({ id: 'edit', label: 'Edit', icon: ICON('pencilicon'), colors: variantColors('secondary') })
     buttons.push({
         id: 'delete',
-        label: '삭제',
+        label: 'Delete',
         icon: ICON('trashicon'),
         colors: variantColors('critical-secondary'),
-        confirm: settings().confirmDelete ? { label: '정말 삭제할까요?', colors: variantColors('critical-primary') } : undefined,
+        confirm: settings().confirmDelete ? { label: 'Delete?', colors: variantColors('critical-primary') } : undefined,
     })
     const opts = { buttons, font: buttonFont(), radius: buttonRadius(), inset: 68 }
     try {
@@ -355,35 +355,31 @@ function SettingsPage({ api }: { api: any }) {
         <ScrollView style={{ flex: 1 }}>
             <Stack spacing={16} style={{ padding: 16 }}>
                 <Choice
-                    title="내 메시지를 왼쪽으로 세게 당기면"
+                    title="Swipe to edit"
                     value={s.swipe}
                     onChange={swipe => save({ swipe })}
                     options={[
-                        ['buttons', '메시지 밑에 수정·삭제 버튼', '약하게 당기면 그대로 답장'],
-                        ['default', '바로 수정 (디스코드 기본)'],
+                        ['buttons', 'Buttons'],
+                        ['default', 'Default'],
                     ]}
                 />
                 <Choice
-                    title="내 메시지를 두 번 누르면"
+                    title="Double tap"
                     value={s.doubleTap}
                     onChange={doubleTap => save({ doubleTap })}
                     options={[
-                        ['dialog', '가운데 창으로 수정·삭제'],
-                        ['buttons', '메시지 밑에 수정·삭제 버튼'],
-                        ['default', '반응 달기 (디스코드 기본)'],
+                        ['dialog', 'Dialog'],
+                        ['buttons', 'Buttons'],
+                        ['default', 'Default'],
                     ]}
                 />
                 <TableRowGroup>
                     <TableSwitchRow
-                        label="삭제는 한 번 더 눌러 확인"
-                        subLabel="밑에 버튼에서 삭제를 누르면 빨갛게 바뀌고, 한 번 더 눌러야 지워져요"
+                        label="Confirm delete"
                         value={s.confirmDelete}
                         onValueChange={(confirmDelete: boolean) => save({ confirmDelete })}
                     />
                 </TableRowGroup>
-                <Text variant="text-xs/normal" color="text-muted">
-                    버튼 밖을 누르면 닫혀요. 밑에 버튼은 네이티브 부분이 있어야 해서, 처음 켠 뒤에는 디스코드를 다시 시작해야 나와요. 그 전에는 가운데 창이 대신 떠요.
-                </Text>
             </Stack>
         </ScrollView>
     )

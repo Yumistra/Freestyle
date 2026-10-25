@@ -2,10 +2,10 @@
 	"format": 1,
 	"id": "yumistra.steal-sticker",
 	"name": "Steal Sticker",
-	"description": "Steal stickers on mobile with ease. Adds Add to Server, Copy URL and Save image buttons to the sticker sheet.",
+	"description": "Steal stickers.",
 	"author": "Yumistra",
 	"icon": "StickerIcon",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

@@ -15,7 +15,7 @@ export function activate() {
         installUserFixes(unpatches)
         installRelaunchReload(unpatches)
         active = true
-        log('info', '봇 패치 적용')
+        log('info', 'Bot patches applied')
     }
     arm()
 }

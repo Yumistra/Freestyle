@@ -46,7 +46,7 @@ function shouldSkip(options: any) {
 
 export function patchJsStack() {
     const StackView = (ReactNavigationStack as any)?.StackView
-    if (typeof StackView !== 'function' && typeof StackView !== 'object') throw new Error('StackView를 찾지 못함')
+    if (typeof StackView !== 'function' && typeof StackView !== 'object') throw new Error('StackView not found')
     status.found.stack = true
     return beforeJSX(StackView, (args: any[]) => {
         try {

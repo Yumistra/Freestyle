@@ -48,8 +48,8 @@ function silentLeaveCommand() {
         type: CHAT,
         inputType: enumValue('ApplicationCommandInputType', 'BUILT_IN_TEXT', 1),
         applicationId: '-1',
-        untranslatedDescription: '알림 없이 이 그룹 DM에서 조용히 나가요',
-        displayDescription: '알림 없이 이 그룹 DM에서 조용히 나가요',
+        untranslatedDescription: 'Leave this group DM silently',
+        displayDescription: 'Leave this group DM silently',
         options: [],
         predicate(ctx: any) {
             const id = ctx?.channel?.id
@@ -60,16 +60,16 @@ function silentLeaveCommand() {
             const id = ctx?.channel?.id
             const channel = id ? (Stores as any).ChannelStore?.getChannel(id) : undefined
             if (channel?.type !== GROUP_DM) {
-                toast('그룹 DM에서만 쓸 수 있어요')
+                toast('Only works in group DMs')
                 return
             }
             try {
                 const api = HTTP()
-                if (!api) throw new Error('HTTP 모듈을 찾지 못함')
+                if (!api) throw new Error('HTTP module not found')
                 await api.del({ url: `/channels/${id}`, query: { silent: true } })
-                toast('그룹 DM에서 조용히 나갔어요')
+                toast('Left silently')
             } catch (e: any) {
-                toast(`나가지 못했어요${e?.body?.message ? `: ${e.body.message}` : e?.message ? `: ${e.message}` : ''}`)
+                toast(`Couldn't leave${e?.body?.message ? `: ${e.body.message}` : e?.message ? `: ${e.message}` : ''}`)
             }
         },
     }

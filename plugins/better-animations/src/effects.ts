@@ -75,43 +75,43 @@ export function normalize(h: Hidden | undefined) {
 // ── 메시지 (채팅에서 메시지가 나타나고 지워질 때, 네이티브) ─────────────────
 // 실제 값은 네이티브(Kotlin)에 같은 이름으로 있다. 여기 hidden 은 미리보기용 (px ≈ dp)
 export const MESSAGE_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본 (없음)' },
-    { id: 'rise', label: '떠오르기', hidden: { o: 0, ty: 28 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, tx: 40 } },
-    { id: 'slide', label: '슬라이드', hidden: { txW: 1 } },
-    { id: 'side', label: '왼쪽에서', hidden: { o: 0, tx: -48 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.9 } },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.6 } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.2 } },
-    { id: 'drop', label: '떨어지기', hidden: { o: 0, ty: 40, s: 0.92 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 70 } },
-    { id: 'blur', label: '블러', hidden: { o: 0, s: 1.04 } },
-    { id: 'circle', label: '원형', hidden: { o: 0.3, s: 0.4 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 0.9, s: 1.25, r: 4 } },
-    { id: 'wave', label: '물결', hidden: { o: 0, ty: 22, r: -5 } },
-    { id: 'none', label: '없음' },
+    { id: 'default', label: 'Default' },
+    { id: 'rise', label: 'Rise', hidden: { o: 0, ty: 28 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, tx: 40 } },
+    { id: 'slide', label: 'Slide', hidden: { txW: 1 } },
+    { id: 'side', label: 'From left', hidden: { o: 0, tx: -48 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.9 } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.6 } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.2 } },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, ty: 40, s: 0.92 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 70 } },
+    { id: 'blur', label: 'Blur', hidden: { o: 0, s: 1.04 } },
+    { id: 'circle', label: 'Circle', hidden: { o: 0.3, s: 0.4 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { txW: 0.9, s: 1.25, r: 4 } },
+    { id: 'wave', label: 'Wave', hidden: { o: 0, ty: 22, r: -5 } },
+    { id: 'none', label: 'None' },
 ]
 
 // ── Cask 3 (iOS 목록 스크롤 애니메이션) ─────────────────────────────
 // https://github.com/ryannair05/Cask-3 의 15가지 효과. id 는 "cask.<이름>"
 // hidden 은 미리보기·지워질 때용 근사치. 실제 움직임은 네이티브(Cask.kt)와 JS(CaskCell)가 원본대로 그린다
 export const CASK_STYLES: Array<{ name: string; label: string; hidden: Hidden }> = [
-    { name: 'fade', label: '페이드', hidden: { o: 0 } },
-    { name: 'flip', label: '플립', hidden: { rx: 180 } },
-    { name: 'bounce', label: '바운스', hidden: { s: 1, sy: 1, o: 0.2 } },
-    { name: 'color', label: '컬러', hidden: { o: 0.6 } },
-    { name: 'permanentColor', label: '영구 컬러', hidden: { o: 0.6 } },
-    { name: 'glitch', label: '글리치', hidden: { s: 0.4 } },
-    { name: 'helix', label: '헬릭스', hidden: { ry: 180 } },
-    { name: 'rotate', label: '회전', hidden: { r: 106 } },
-    { name: 'zoom', label: '줌', hidden: { s: 5 } },
-    { name: 'drop', label: '드롭', hidden: { ty: -150 } },
-    { name: 'stretch', label: '스트레치', hidden: { o: 0.2 } },
-    { name: 'slide', label: '슬라이드', hidden: { txW: 1 } },
-    { name: 'shake', label: '셰이크', hidden: { tx: 10 } },
-    { name: 'swing', label: '스윙', hidden: { tx: 40 } },
-    { name: 'jiggle', label: '지글', hidden: { r: 4 } },
+    { name: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { name: 'flip', label: 'Flip', hidden: { rx: 180 } },
+    { name: 'bounce', label: 'Bounce', hidden: { s: 1, sy: 1, o: 0.2 } },
+    { name: 'color', label: 'Color', hidden: { o: 0.6 } },
+    { name: 'permanentColor', label: 'Permanent color', hidden: { o: 0.6 } },
+    { name: 'glitch', label: 'Glitch', hidden: { s: 0.4 } },
+    { name: 'helix', label: 'Helix', hidden: { ry: 180 } },
+    { name: 'rotate', label: 'Rotate', hidden: { r: 106 } },
+    { name: 'zoom', label: 'Zoom', hidden: { s: 5 } },
+    { name: 'drop', label: 'Drop', hidden: { ty: -150 } },
+    { name: 'stretch', label: 'Stretch', hidden: { o: 0.2 } },
+    { name: 'slide', label: 'Slide', hidden: { txW: 1 } },
+    { name: 'shake', label: 'Shake', hidden: { tx: 10 } },
+    { name: 'swing', label: 'Swing', hidden: { tx: 40 } },
+    { name: 'jiggle', label: 'Jiggle', hidden: { r: 4 } },
 ]
 
 const caskEffects = (prefix: string): Effect[] => CASK_STYLES.map(c => ({ id: `cask.${c.name}`, label: `${prefix}${c.label}`, hidden: c.hidden }))
@@ -119,162 +119,162 @@ const caskEffects = (prefix: string): Effect[] => CASK_STYLES.map(c => ({ id: `c
 export const caskStyleOf = (id: string | undefined) => (id?.startsWith('cask.') ? id.slice(5) : undefined)
 
 // ── 목록 스크롤 (스크롤해서 새로 보이는 줄) ─────────────────────────────
-export const LIST_EFFECTS: Effect[] = [{ id: 'default', label: '기본 (없음)' }, ...caskEffects('')]
+export const LIST_EFFECTS: Effect[] = [{ id: 'default', label: 'Default' }, ...caskEffects('')]
 
 // ── 설정·메뉴 화면 (디스코드 안쪽 화면 전환) ─────────────────────────────
 export const STACK_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'slip', label: '슬립', hidden: { o: 0, txW: 0.25 }, under: { txW: -0.08 } },
-    { id: 'slide', label: '슬라이드', hidden: { txW: 1 }, under: { txW: -0.3 }, dim: 0.25 },
-    { id: 'drawer', label: '서랍', hidden: { txW: 1 }, under: { s: 0.9, o: 0.5 }, dim: 0.35 },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.86 }, under: { s: 1.06, o: 0 } },
-    { id: 'zoom', label: '줌', hidden: { o: 0, s: 1.18 }, under: { s: 0.9, o: 0 } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 }, under: { o: 0.4, s: 0.96 } },
-    { id: 'circleScale', label: '원형 확대', hidden: { o: 0, s: 0.01 }, under: { s: 0.92 }, dim: 0.3 },
-    { id: 'slideUp', label: '아래에서', hidden: { tyH: 1 }, under: { s: 0.94 }, dim: 0.3, gesture: 'vertical' },
-    { id: 'rise', label: '떠오르기', hidden: { o: 0, tyH: 0.12 }, under: { o: 0.4 }, gesture: 'vertical' },
-    { id: 'flip', label: '플립', hidden: { o: 0, ry: 75 }, under: { o: 0, ry: -75 } },
-    { id: 'rotate', label: '회전', hidden: { o: 0, r: 10, tyH: 0.12, s: 0.92 }, under: { o: 0.3, s: 0.96 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.15, s: 1.3, r: 6 }, under: { txW: -0.2, s: 0.92 }, dim: 0.2 },
-    { id: 'none', label: '없음' },
+    { id: 'default', label: 'Default' },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, txW: 0.25 }, under: { txW: -0.08 } },
+    { id: 'slide', label: 'Slide', hidden: { txW: 1 }, under: { txW: -0.3 }, dim: 0.25 },
+    { id: 'drawer', label: 'Drawer', hidden: { txW: 1 }, under: { s: 0.9, o: 0.5 }, dim: 0.35 },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.86 }, under: { s: 1.06, o: 0 } },
+    { id: 'zoom', label: 'Zoom', hidden: { o: 0, s: 1.18 }, under: { s: 0.9, o: 0 } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.15 }, under: { o: 0.4, s: 0.96 } },
+    { id: 'circleScale', label: 'Circle scale', hidden: { o: 0, s: 0.01 }, under: { s: 0.92 }, dim: 0.3 },
+    { id: 'slideUp', label: 'From bottom', hidden: { tyH: 1 }, under: { s: 0.94 }, dim: 0.3, gesture: 'vertical' },
+    { id: 'rise', label: 'Rise', hidden: { o: 0, tyH: 0.12 }, under: { o: 0.4 }, gesture: 'vertical' },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, ry: 75 }, under: { o: 0, ry: -75 } },
+    { id: 'rotate', label: 'Rotate', hidden: { o: 0, r: 10, tyH: 0.12, s: 0.92 }, under: { o: 0.3, s: 0.96 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { txW: 1.15, s: 1.3, r: 6 }, under: { txW: -0.2, s: 0.92 }, dim: 0.2 },
+    { id: 'none', label: 'None' },
 ]
 
 // ── 큰 화면 (채널·프로필 등, 안드로이드 네이티브 전환) ──────────────────────
 // id가 react-native-screens 의 stackAnimation 값 그대로다. hidden/under는 미리보기용 근사치
 export const NATIVE_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'fade_from_bottom', label: '페이드 위로', hidden: { o: 0, tyH: 0.08 } },
-    { id: 'slide_from_right', label: '오른쪽에서', hidden: { txW: 1 }, under: { txW: -1 } },
-    { id: 'slide_from_left', label: '왼쪽에서', hidden: { txW: -1 }, under: { txW: 1 } },
-    { id: 'slide_from_bottom', label: '아래에서', hidden: { tyH: 1 } },
-    { id: 'ios_from_right', label: 'iOS 오른쪽', hidden: { txW: 1 }, under: { txW: -0.3 }, dim: 0.2 },
-    { id: 'ios_from_left', label: 'iOS 왼쪽', hidden: { txW: -1 }, under: { txW: 0.3 }, dim: 0.2 },
-    { id: 'none', label: '없음' },
+    { id: 'default', label: 'Default' },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'fade_from_bottom', label: 'Fade up', hidden: { o: 0, tyH: 0.08 } },
+    { id: 'slide_from_right', label: 'From right', hidden: { txW: 1 }, under: { txW: -1 } },
+    { id: 'slide_from_left', label: 'From left', hidden: { txW: -1 }, under: { txW: 1 } },
+    { id: 'slide_from_bottom', label: 'From bottom', hidden: { tyH: 1 } },
+    { id: 'ios_from_right', label: 'iOS right', hidden: { txW: 1 }, under: { txW: -0.3 }, dim: 0.2 },
+    { id: 'ios_from_left', label: 'iOS left', hidden: { txW: -1 }, under: { txW: 0.3 }, dim: 0.2 },
+    { id: 'none', label: 'None' },
 ]
 
 // ── 아래 창 (길게 눌러 뜨는 액션시트) ───────────────────────────────────
 export const SHEET_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'custom', label: '직접 설정', hidden: { tyH: 1 } },
+    { id: 'default', label: 'Default' },
+    { id: 'custom', label: 'Custom', hidden: { tyH: 1 } },
 ]
 
 // ── 팝업 메뉴 (⋯ 메뉴) ────────────────────────────────────────────
 export const MENU_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05, anchor: true } },
-    { id: 'corner', label: '모서리에서', hidden: { o: 0, s: 0.5, anchor: true } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15, anchor: true } },
-    { id: 'drop', label: '펼치기', hidden: { o: 0, sy: 0.2, anchor: true } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, ty: -18 } },
-    { id: 'slide', label: '옆에서', hidden: { o: 0, tx: 60 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.85 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: -80, anchor: true, s: 0.9 } },
+    { id: 'default', label: 'Default' },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05, anchor: true } },
+    { id: 'corner', label: 'Corner', hidden: { o: 0, s: 0.5, anchor: true } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.15, anchor: true } },
+    { id: 'drop', label: 'Unfold', hidden: { o: 0, sy: 0.2, anchor: true } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, ty: -18 } },
+    { id: 'slide', label: 'Side', hidden: { o: 0, tx: 60 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.85 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: -80, anchor: true, s: 0.9 } },
 ]
 
 // ── 확인창 (가운데 뜨는 알림창) ─────────────────────────────────────
 export const ALERT_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.7, ty: 50 } },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
-    { id: 'shrink', label: '축소', hidden: { o: 0, s: 1.3 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 40 } },
-    { id: 'slideUp', label: '아래에서', hidden: { o: 0, tyH: 0.55 } },
-    { id: 'slideDown', label: '위에서', hidden: { o: 0, tyH: -0.55 } },
-    { id: 'side', label: '옆에서', hidden: { o: 0, txW: 1 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 80, s: 0.9 } },
-    { id: 'rotate', label: '회전', hidden: { o: 0, r: -14, s: 0.6 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { tyH: 1.1, r: -10, s: 1.2 } },
+    { id: 'default', label: 'Default' },
+    { id: 'zoom', label: 'Scale', hidden: { o: 0, s: 0.7, ty: 50 } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.15 } },
+    { id: 'shrink', label: 'Shrink', hidden: { o: 0, s: 1.3 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, ty: 40 } },
+    { id: 'slideUp', label: 'From bottom', hidden: { o: 0, tyH: 0.55 } },
+    { id: 'slideDown', label: 'From top', hidden: { o: 0, tyH: -0.55 } },
+    { id: 'side', label: 'Side', hidden: { o: 0, txW: 1 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 80, s: 0.9 } },
+    { id: 'rotate', label: 'Rotate', hidden: { o: 0, r: -14, s: 0.6 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { tyH: 1.1, r: -10, s: 1.2 } },
 ]
 
 // ── 배경 (확인창·팝업 메뉴 뒤를 어둡게 덮는 막) ───────────────────────────
 export const BACKDROP_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'solid', label: '단색' },
-    { id: 'none', label: '없음' },
+    { id: 'default', label: 'Default' },
+    { id: 'solid', label: 'Solid' },
+    { id: 'none', label: 'None' },
 ]
 
 // ── 토스트 (화면 위아래 작은 알림) ─────────────────────────────────────
 export const TOAST_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'slide', label: '밀려오기', hidden: { o: 0, edge: true } },
-    { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, ty: 36, s: 0.9 } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 16 } },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
-    { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.6 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'side', label: '옆에서', hidden: { o: 0, txW: -1 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.1, r: 8 } },
+    { id: 'default', label: 'Default' },
+    { id: 'slide', label: 'Slide in', hidden: { o: 0, edge: true } },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, edge: true, ty: 36, s: 0.9 } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, ty: 16 } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.15 } },
+    { id: 'zoom', label: 'Scale', hidden: { o: 0, s: 0.6 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'side', label: 'Side', hidden: { o: 0, txW: -1 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 90 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { txW: 1.1, r: 8 } },
 ]
 
 // ── 알림 배너 (다른 채널 메시지가 오면 화면 위에 뜨는 알림) ──────────────────
 export const NOTICE_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'slide', label: '밀려오기', hidden: { o: 0, edge: true } },
-    { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, ty: 30, s: 0.9 } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 20 } },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
-    { id: 'point', label: '포인트', hidden: { o: 0, s: 0.15 } },
-    { id: 'zoom', label: '확대', hidden: { o: 0, s: 0.6 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'side', label: '옆에서', hidden: { o: 0, txW: -1 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { txW: 1.1, r: 8 } },
+    { id: 'default', label: 'Default' },
+    { id: 'slide', label: 'Slide in', hidden: { o: 0, edge: true } },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, edge: true, ty: 30, s: 0.9 } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, ty: 20 } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
+    { id: 'point', label: 'Point', hidden: { o: 0, s: 0.15 } },
+    { id: 'zoom', label: 'Scale', hidden: { o: 0, s: 0.6 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'side', label: 'Side', hidden: { o: 0, txW: -1 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 90 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { txW: 1.1, r: 8 } },
 ]
 
 // ── 채널 화면 밀기 (채널 목록 ↔ 채팅) ──────────────────────────────
 export const PANEL_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'custom', label: '직접 설정', hidden: { txW: 0.82 } },
+    { id: 'default', label: 'Default' },
+    { id: 'custom', label: 'Custom', hidden: { txW: 0.82 } },
 ]
 
 // ── 채널 목록 (카테고리 접기·펼치기) ─────────────────────────────────
 export const CHANNEL_LIST_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본 (바로)' },
-    { id: 'smooth', label: '페이드', hidden: { o: 0 } },
-    { id: 'slip', label: '슬립', hidden: { o: 0, tx: -24 } },
-    { id: 'drop', label: '떨어지기', hidden: { o: 0, ty: -14 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.6 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 70 } },
+    { id: 'default', label: 'Default' },
+    { id: 'smooth', label: 'Fade', hidden: { o: 0 } },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, tx: -24 } },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, ty: -14 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.6 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 70 } },
 ]
 
 // ── 서버 바꾸기 (서버를 누르면 채널 목록이 바뀔 때) ────────────────────────
 export const SERVER_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본 (바로)' },
-    { id: 'rise', label: '올라가며 바뀌기', hidden: { o: 0, ty: 36 }, through: true },
-    { id: 'slip', label: '슬립', hidden: { o: 0, ty: 28 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'scale', label: '확대', hidden: { o: 0, s: 0.92 } },
-    { id: 'zoom', label: '줌', hidden: { o: 0, s: 1.08 } },
-    { id: 'side', label: '옆에서', hidden: { o: 0, tx: -40 } },
-    { id: 'slideUp', label: '아래에서', hidden: { o: 0, tyH: 0.25 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 35 } },
-    { id: 'none', label: '없음' },
+    { id: 'default', label: 'Default' },
+    { id: 'rise', label: 'Rise through', hidden: { o: 0, ty: 36 }, through: true },
+    { id: 'slip', label: 'Slip', hidden: { o: 0, ty: 28 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'scale', label: 'Scale', hidden: { o: 0, s: 0.92 } },
+    { id: 'zoom', label: 'Zoom', hidden: { o: 0, s: 1.08 } },
+    { id: 'side', label: 'Side', hidden: { o: 0, tx: -40 } },
+    { id: 'slideUp', label: 'From bottom', hidden: { o: 0, tyH: 0.25 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 35 } },
+    { id: 'none', label: 'None' },
 ]
 
 // ── 서버 폴더 열고 닫기 ──────────────────────────────────────────
 export const FOLDER_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'drop', label: '떨어지기', hidden: { o: 0, edge: true, s: 0.5 } },
-    { id: 'slide', label: '밀려나오기', hidden: { o: 0, edge: true } },
-    { id: 'pop', label: '톡', hidden: { o: 0, s: 0.05 } },
-    { id: 'fade', label: '페이드', hidden: { o: 0 } },
-    { id: 'side', label: '옆에서', hidden: { o: 0, tx: -48 } },
-    { id: 'flip', label: '플립', hidden: { o: 0, rx: 90 } },
-    { id: 'rotate', label: '회전', hidden: { o: 0, r: -120, s: 0.3 } },
-    { id: 'outOfBounds', label: '화면 밖에서', hidden: { tx: -120, s: 1.4 } },
+    { id: 'default', label: 'Default' },
+    { id: 'drop', label: 'Drop', hidden: { o: 0, edge: true, s: 0.5 } },
+    { id: 'slide', label: 'Slide out', hidden: { o: 0, edge: true } },
+    { id: 'pop', label: 'Pop', hidden: { o: 0, s: 0.05 } },
+    { id: 'fade', label: 'Fade', hidden: { o: 0 } },
+    { id: 'side', label: 'Side', hidden: { o: 0, tx: -48 } },
+    { id: 'flip', label: 'Flip', hidden: { o: 0, rx: 90 } },
+    { id: 'rotate', label: 'Rotate', hidden: { o: 0, r: -120, s: 0.3 } },
+    { id: 'outOfBounds', label: 'Out of bounds', hidden: { tx: -120, s: 1.4 } },
 ]
 
 // ── 작은 움직임 (체크박스·라디오·버튼 등 디스코드 공통 스프링) ─────────────
 export const SUBTLE_EFFECTS: Effect[] = [
-    { id: 'default', label: '기본' },
-    { id: 'custom', label: '직접 설정', hidden: { o: 0, s: 0.5 } },
+    { id: 'default', label: 'Default' },
+    { id: 'custom', label: 'Custom', hidden: { o: 0, s: 0.5 } },
 ]
 
 MESSAGE_EFFECTS.splice(MESSAGE_EFFECTS.length - 1, 0, ...caskEffects('Cask · '))
@@ -302,8 +302,8 @@ export const effectOf = (module: ModuleKey, id: string): Effect => EFFECTS[modul
 
 /** 나갈 때 효과로 고를 수 있는 것: "같게" + 기본·없음을 뺀 효과들 */
 export function exitChoices(module: ModuleKey): Effect[] {
-    const through = THROUGH_MODULES.has(module) ? [{ id: THROUGH_ID, label: '반대쪽으로 지나가기' }] : []
-    return [{ id: SAME_ID, label: '나타날 때와 같게' }, ...through, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
+    const through = THROUGH_MODULES.has(module) ? [{ id: THROUGH_ID, label: 'Through' }] : []
+    return [{ id: SAME_ID, label: 'Same' }, ...through, ...EFFECTS[module].filter(e => e.id !== DEFAULT_ID && e.id !== 'none' && e.hidden)]
 }
 
 /** "반대쪽으로 지나가기"를 고를 수 있는 곳 (옛 것과 새 것이 같이 보이는 곳) */
@@ -353,22 +353,22 @@ export type Direction = 'auto' | 'up' | 'down' | 'left' | 'right' | 'toward' | '
 export type Position = 'auto' | 'tl' | 't' | 'tr' | 'l' | 'c' | 'r' | 'bl' | 'b' | 'br'
 
 export const DIRECTIONS: Array<{ id: Direction; label: string }> = [
-    { id: 'auto', label: '효과대로' },
-    { id: 'up', label: '위로' },
-    { id: 'down', label: '아래로' },
-    { id: 'left', label: '왼쪽으로' },
-    { id: 'right', label: '오른쪽으로' },
-    { id: 'toward', label: '다가오기' },
-    { id: 'away', label: '멀어지기' },
+    { id: 'auto', label: 'Auto' },
+    { id: 'up', label: 'Up' },
+    { id: 'down', label: 'Down' },
+    { id: 'left', label: 'Left' },
+    { id: 'right', label: 'Right' },
+    { id: 'toward', label: 'Toward' },
+    { id: 'away', label: 'Away' },
 ]
 
 export const POSITIONS: Array<{ id: Position; label: string }> = [
-    { id: 'auto', label: '자동' },
+    { id: 'auto', label: 'Auto' },
     { id: 'tl', label: '↖' },
     { id: 't', label: '↑' },
     { id: 'tr', label: '↗' },
     { id: 'l', label: '←' },
-    { id: 'c', label: '가운데' },
+    { id: 'c', label: 'Center' },
     { id: 'r', label: '→' },
     { id: 'bl', label: '↙' },
     { id: 'b', label: '↓' },
@@ -442,14 +442,14 @@ export function applyMove(hidden: Hidden | undefined, opts: MoveOptions | undefi
 export type EasingKey = string
 
 export const EASINGS: Array<{ id: EasingKey; label: string }> = [
-    { id: 'out', label: '감속' },
-    { id: 'expo', label: '빠르게' },
-    { id: 'smooth', label: '부드럽게' },
-    { id: 'linear', label: '일정하게' },
-    { id: 'back', label: '살짝 튕김' },
-    { id: 'spring', label: '스프링' },
-    { id: 'bounce', label: '통통' },
-    { id: 'elastic', label: '고무줄' },
+    { id: 'out', label: 'Ease out' },
+    { id: 'expo', label: 'Expo' },
+    { id: 'smooth', label: 'Smooth' },
+    { id: 'linear', label: 'Linear' },
+    { id: 'back', label: 'Back' },
+    { id: 'spring', label: 'Spring' },
+    { id: 'bounce', label: 'Bounce' },
+    { id: 'elastic', label: 'Elastic' },
 ]
 
 export type EasingType = 'linear' | 'ease' | 'back' | 'elastic' | 'steps'
@@ -465,16 +465,16 @@ export interface CustomEasing {
 }
 
 export const EASING_TYPES: Array<{ id: EasingType; label: string }> = [
-    { id: 'linear', label: '일정' },
-    { id: 'ease', label: '곡선' },
-    { id: 'back', label: '튕김' },
-    { id: 'elastic', label: '고무줄' },
-    { id: 'steps', label: '계단' },
+    { id: 'linear', label: 'Linear' },
+    { id: 'ease', label: 'Curve' },
+    { id: 'back', label: 'Back' },
+    { id: 'elastic', label: 'Elastic' },
+    { id: 'steps', label: 'Steps' },
 ]
 export const EASING_BEZIERS: Array<{ id: EasingBezier; label: string }> = [
-    { id: 'in', label: '점점 빠르게 (In)' },
-    { id: 'out', label: '점점 느리게 (Out)' },
-    { id: 'inOut', label: '양쪽 (In Out)' },
+    { id: 'in', label: 'In' },
+    { id: 'out', label: 'Out' },
+    { id: 'inOut', label: 'In Out' },
 ]
 export const EASING_STYLES: Array<{ id: EasingStyle; label: string }> = [
     { id: 'sine', label: 'Sine' },
@@ -532,11 +532,11 @@ export function easingLabel(key: EasingKey) {
     const preset = EASINGS.find(e => e.id === key)
     if (preset) return preset.label
     const c = decodeEasing(key)
-    if (c.type === 'linear') return '직접 · 일정'
-    if (c.type === 'steps') return `직접 · 계단 ${c.amount}`
+    if (c.type === 'linear') return 'Custom · Linear'
+    if (c.type === 'steps') return `Custom · Steps ${c.amount}`
     const bez = c.bezier === 'inOut' ? 'In Out' : c.bezier === 'in' ? 'In' : 'Out'
     const name = c.type === 'ease' ? EASING_STYLES.find(s => s.id === c.style)?.label : c.type === 'back' ? 'Back' : 'Elastic'
-    return `직접 · ${name} ${bez}`
+    return `Custom · ${name} ${bez}`
 }
 
 /** 스프링만 쓸 수 있는 곳에서 고른 움직임을 감쇠비로 바꾼다 (작을수록 출렁임) */

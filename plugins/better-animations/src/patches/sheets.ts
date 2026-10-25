@@ -34,7 +34,7 @@ function config() {
 export function patchSheets() {
     const lib: any = BottomSheet
     const targets = new Set<any>([lib?.default, lib?.BottomSheetModal].filter(Boolean))
-    if (!targets.size) throw new Error('bottom-sheet 컴포넌트를 찾지 못함')
+    if (!targets.size) throw new Error('bottom-sheet component not found')
     status.found.sheets = true
     const unpatches = [...targets].map(type =>
         beforeJSX(type, (args: any[]) => {

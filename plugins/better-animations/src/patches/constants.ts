@@ -88,7 +88,7 @@ export function patchConstants(cleanup: (...fns: Array<() => unknown>) => void) 
             withProps('SUBTLE_SPRING') as any,
             (mod: any) => {
                 remember(motion, mod, ['SUBTLE_SPRING'])
-                found('작은 움직임')
+                found('subtle')
                 applyConstants()
             },
             { max: 3 } as any,
@@ -97,7 +97,7 @@ export function patchConstants(cleanup: (...fns: Array<() => unknown>) => void) 
             withProps('FOLDER_SPRING_PHYSICS', 'TRANSITION_PHYSICS') as any,
             (mod: any) => {
                 remember(guilds, mod, ['TRANSITION_PHYSICS'])
-                found('서버 폴더')
+                found('folder')
                 applyConstants()
             },
             { max: 3 } as any,
@@ -116,7 +116,7 @@ export function patchConstants(cleanup: (...fns: Array<() => unknown>) => void) 
                         SIDE_PANEL_CLOSE_DURATION_MS: mod.SIDE_PANEL_CLOSE_DURATION_MS,
                     },
                 })
-                found('채널 화면 밀기')
+                found('panel')
                 applyConstants()
             },
             { max: 3 } as any,

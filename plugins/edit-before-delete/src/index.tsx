@@ -45,10 +45,10 @@ function SettingsPage({ api }: { api: any }) {
     return (
         <ScrollView style={{ flex: 1 }}>
             <Stack spacing={16} style={{ padding: 16 }}>
-                <TableRowGroup title="삭제하기 전에 바꿀 내용">
+                <TableRowGroup title="Replace with">
                     <TextInput value={s.text} onChange={(text: string) => save({ text })} placeholder="** **" size="md" />
                 </TableRowGroup>
-                <TableRowGroup title="수정 후 기다릴 시간">
+                <TableRowGroup title="Delay (ms)">
                     <TextInput
                         value={String(s.delay)}
                         onChange={(v: string) => save({ delay: Math.max(0, Math.min(5000, Number(v.replace(/\D/g, '')) || 0)) })}
@@ -57,9 +57,6 @@ function SettingsPage({ api }: { api: any }) {
                         size="md"
                     />
                 </TableRowGroup>
-                <Text variant="text-xs/normal" color="text-muted">
-                    "** **"는 굵게 처리된 공백이라 수정된 메시지가 빈 메시지처럼 보여요. 내 메시지에만 적용되고, 투표·보내기 실패한 메시지는 바로 삭제돼요. 기다리는 시간은 ms 단위예요.
-                </Text>
             </Stack>
         </ScrollView>
     )

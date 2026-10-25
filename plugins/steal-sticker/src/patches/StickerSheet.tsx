@@ -74,9 +74,9 @@ function wrapComponent(Type: any): any {
 function post(out: any, sticker: StickerItem | undefined) {
     if (!sticker) return out
     try {
-        if (!inject(out, sticker, 0)) dbg('버튼 넣을 자리를 못 찾음')
+        if (!inject(out, sticker, 0)) dbg('no place for buttons')
     } catch (e) {
-        dbg(`버튼 추가 실패: ${String(e)}`)
+        dbg(`failed to add buttons: ${String(e)}`)
     }
     return out
 }
@@ -165,7 +165,7 @@ export default () =>
                         return { ...res, type: wrapComponent(res.type), props: { ...res.props, [STICKER_PROP]: sticker } }
                     }
                 } catch (e) {
-                    dbg(`창 감싸기 실패: ${String(e)}`)
+                    dbg(`failed to wrap sheet: ${String(e)}`)
                 }
                 return res
             }

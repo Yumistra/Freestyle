@@ -2,10 +2,10 @@
 	"format": 1,
 	"id": "yumistra.plugin-backup",
 	"name": "Plugin Backup",
-	"description": "설치한 플러그인, 저장소, 켜짐 상태, 플러그인 설정과 데이터 파일을 백업하고 한 번에 다시 불러옵니다.",
+	"description": "Back up and restore your plugins.",
 	"author": "Yumistra",
 	"icon": "DownloadIcon",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

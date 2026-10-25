@@ -2,10 +2,10 @@
 	"format": 1,
 	"id": "yumistra.double-tap-actions",
 	"name": "Double Tap Actions",
-	"description": "내 메시지를 세게 당기면 바로 수정 대신 메시지 밑에 수정·삭제 버튼이 나와요. 두 번 누르면 반응 대신 수정·삭제 창이 떠요.",
+	"description": "Quick actions for your own messages.",
 	"author": "Yumistra",
 	"icon": "PencilIcon",
-	"version": "1.3.0",
+	"version": "1.4.0",
 	"dependencies": {
 		"revenge.api": {},
 		"discord": {}

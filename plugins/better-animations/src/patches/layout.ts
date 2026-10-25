@@ -267,7 +267,7 @@ function collapseDelay(action: any) {
 
 export function patchLayout() {
     const D: any = Dispatcher
-    if (typeof D?.dispatch !== 'function') throw new Error('Dispatcher를 찾지 못함')
+    if (typeof D?.dispatch !== 'function') throw new Error('Dispatcher not found')
     status.found.layout = true
     return instead(D, 'dispatch', function (this: unknown, args: any[], orig: (...a: any[]) => any) {
         let wait = 0

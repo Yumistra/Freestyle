@@ -61,7 +61,7 @@ function confirm(title: string, body: string, actionText: string, action: () => 
             actions={
                 <>
                     <AlertActionButton text={actionText} variant="primary" onPress={action} />
-                    <AlertActionButton text="취소" variant="secondary" />
+                    <AlertActionButton text="Cancel" variant="secondary" />
                 </>
             }
         />,
@@ -70,16 +70,15 @@ function confirm(title: string, body: string, actionText: string, action: () => 
 
 function describeResult(r: RestoreResult) {
     const lines = [
-        `설치 ${r.installed.length}개 · 설정 복원 ${r.storage}개 · 파일 복원 ${r.files}개 · 켜짐 상태 변경 ${r.toggled}개`,
-        ...r.failed.map(f => `실패: ${f.id} (${f.reason})`),
-        ...r.skipped.map(s => `건너뜀: ${s.id} (${s.reason})`),
+        `Installed ${r.installed.length} · Settings ${r.storage} · Files ${r.files} · Toggled ${r.toggled}`,
+        ...r.failed.map(f => `Failed: ${f.id} (${f.reason})`),
+        ...r.skipped.map(s => `Skipped: ${s.id} (${s.reason})`),
     ]
     return lines.join('\n')
 }
 
 function showRestoreDone(r: RestoreResult) {
-    const note = r.files ? '\n폰트·아이콘·이모지처럼 앱 시작 때 읽는 테마 파일은 앱을 완전히 껐다 켜야 적용됩니다.' : ''
-    confirm('복원 완료', `${describeResult(r)}\n\n앱을 다시 불러와야 모두 적용됩니다.${note}`, '다시 불러오기', () => reloadApp())
+    confirm('Restored', describeResult(r), 'Reload', () => reloadApp())
 }
 
 export default function SettingsPage({ api }: { api: any }) {
@@ -110,37 +109,37 @@ export default function SettingsPage({ api }: { api: any }) {
     }
 
     const backupNow = () =>
-        run('백업 만드는 중…', async () => {
+        run('Backing up…', async () => {
             const b = await createBackup(text => text && setBusy(text))
             await addBackup(b)
             setSelected(0)
-            toast(`백업했습니다: ${summaryOf(b)}`)
+            toast(`Backed up: ${summaryOf(b)}`)
         })
 
     const importBackup = (text: string) =>
-        run('가져오는 중…', async () => {
+        run('Importing…', async () => {
             let raw = text.trim()
-            if (!raw) throw new Error('붙여넣은 내용이 없습니다')
+            if (!raw) throw new Error('Nothing to import')
             if (/^https?:\/\//i.test(raw)) {
                 const res = await fetch(raw, { cache: 'no-store' } as any)
-                if (!res.ok) throw new Error(`다운로드 실패 (HTTP ${res.status})`)
+                if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
                 raw = await res.text()
             }
-            setBusy('파일 푸는 중…')
+            setBusy('Unpacking…')
             const b = await storeImportedFiles(parseBackup(raw))
             await addBackup(b)
             setSelected(0)
             setInput('')
-            toast(`가져왔습니다: ${summaryOf(b)}`)
+            toast(`Imported: ${summaryOf(b)}`)
         })
 
     const restore = (b: Backup) =>
         confirm(
-            '이 백업으로 복원할까요?',
-            `${dateOf(b.createdAt)}\n${summaryOf(b)}\n\n없는 플러그인은 저장소에서 설치하고, 고른 항목을 백업 상태로 되돌립니다.`,
-            '복원',
+            'Restore this backup?',
+            `${dateOf(b.createdAt)}\n${summaryOf(b)}`,
+            'Restore',
             () =>
-                run('복원 중…', async () => {
+                run('Restoring…', async () => {
                     const r = await restoreBackup(b, opts, text => text && setBusy(text))
                     showRestoreDone(r)
                 }),
@@ -151,20 +150,15 @@ export default function SettingsPage({ api }: { api: any }) {
         run(label, async () => {
             const { json, withFiles } = await exportBackup(b)
             await fn(json)
-            if (!withFiles) toast('데이터 파일이 커서 복사본에는 설정만 들어갑니다. 파일은 이 기기에서 복원할 때만 쓰입니다.')
+            if (!withFiles) toast('Files too large, copied settings only')
         })
 
     return (
         <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
             <Stack spacing={24} style={{ padding: 16, paddingBottom: 48 }}>
-                <Stack spacing={8}>
-                    <Button text={busy || '지금 백업하기'} variant="primary" size="md" disabled={!!busy} onPress={backupNow} />
-                    <Text variant="text-sm/normal" color="text-muted">
-                        설치한 플러그인과 저장소, 켜짐/꺼짐 상태, 플러그인 설정(storage.json·state.json 등), 설정이 가리키는 데이터 파일(폰트·배경 이미지·아이콘 등)까지 저장합니다. 최근 {MAX_BACKUPS}개까지 보관합니다.
-                    </Text>
-                </Stack>
+                <Button text={busy || 'Back up now'} variant="primary" size="md" disabled={!!busy} onPress={backupNow} />
 
-                <TableRowGroup title="저장된 백업 · 눌러서 선택">
+                <TableRowGroup title="Backups">
                     {backups.length ? (
                         backups.map((b, i) => (
                             <TableRow
@@ -175,53 +169,53 @@ export default function SettingsPage({ api }: { api: any }) {
                             />
                         ))
                     ) : (
-                        <TableRow label="아직 백업이 없습니다" />
+                        <TableRow label="No backups" />
                     )}
                 </TableRowGroup>
 
                 {current && (
                     <Stack spacing={8}>
-                        <TableRowGroup title="복원할 항목">
+                        <TableRowGroup title="Restore">
                             {[
-                                <TableSwitchRow key="repos" label="저장소" subLabel="백업에 있던 플러그인 저장소를 추가" value={opts.repos} onValueChange={(repos: boolean) => setOpts({ ...opts, repos })} />,
-                                <TableSwitchRow key="install" label="없는 플러그인 설치" subLabel="저장소에서 다시 받음 (파일로 설치한 건 제외)" value={opts.install} onValueChange={(install: boolean) => setOpts({ ...opts, install })} />,
-                                <TableSwitchRow key="storage" label="플러그인 설정" subLabel="storage.json·state.json 등을 백업 내용으로 덮어씀" value={opts.storage} onValueChange={(storage: boolean) => setOpts({ ...opts, storage })} />,
-                                <TableSwitchRow key="files" label="플러그인 데이터 파일" subLabel="폰트·배경 이미지·아이콘 등 설정이 쓰는 파일을 되돌림" value={opts.files} onValueChange={(files: boolean) => setOpts({ ...opts, files })} />,
-                                <TableSwitchRow key="enabled" label="켜짐/꺼짐 상태" value={opts.enabled} onValueChange={(enabled: boolean) => setOpts({ ...opts, enabled })} />,
+                                <TableSwitchRow key="repos" label="Repositories" value={opts.repos} onValueChange={(repos: boolean) => setOpts({ ...opts, repos })} />,
+                                <TableSwitchRow key="install" label="Missing plugins" value={opts.install} onValueChange={(install: boolean) => setOpts({ ...opts, install })} />,
+                                <TableSwitchRow key="storage" label="Settings" value={opts.storage} onValueChange={(storage: boolean) => setOpts({ ...opts, storage })} />,
+                                <TableSwitchRow key="files" label="Files" value={opts.files} onValueChange={(files: boolean) => setOpts({ ...opts, files })} />,
+                                <TableSwitchRow key="enabled" label="Enabled state" value={opts.enabled} onValueChange={(enabled: boolean) => setOpts({ ...opts, enabled })} />,
                             ]}
                         </TableRowGroup>
-                        <Button text={busy || '이 백업으로 복원'} variant="primary" size="md" disabled={!!busy} onPress={() => restore(current)} />
+                        <Button text={busy || 'Restore'} variant="primary" size="md" disabled={!!busy} onPress={() => restore(current)} />
                         <Stack direction="horizontal" spacing={8}>
                             <View style={{ flex: 1 }}>
                                 <Button
-                                    text="복사"
+                                    text="Copy"
                                     variant="secondary"
                                     size="md"
                                     disabled={!!busy}
                                     onPress={() =>
-                                        exportThen(current, '복사하는 중…', json => {
+                                        exportThen(current, 'Copying…', json => {
                                             Clipboard.setString(json)
-                                            toast('백업을 클립보드에 복사했습니다')
+                                            toast('Copied')
                                         })
                                     }
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Button
-                                    text="공유"
+                                    text="Share"
                                     variant="secondary"
                                     size="md"
                                     disabled={!!busy}
-                                    onPress={() => exportThen(current, '공유 준비 중…', json => Share.share({ title: 'Revenge 플러그인 백업', message: json }).catch(() => {}))}
+                                    onPress={() => exportThen(current, 'Preparing…', json => Share.share({ title: 'Plugin Backup', message: json }).catch(() => {}))}
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Button
-                                    text="삭제"
+                                    text="Delete"
                                     variant="destructive"
                                     size="md"
                                     onPress={() =>
-                                        confirm('백업을 삭제할까요?', dateOf(current.createdAt), '삭제', () => {
+                                        confirm('Delete this backup?', dateOf(current.createdAt), 'Delete', () => {
                                             setSelected(null)
                                             saveBackups(backups.filter(b => b !== current))
                                             deleteBackupFiles(current)
@@ -230,7 +224,7 @@ export default function SettingsPage({ api }: { api: any }) {
                                 />
                             </View>
                         </Stack>
-                        <TableRowGroup title="백업 내용">
+                        <TableRowGroup title="Contents">
                             {current.plugins
                                 .filter(p => {
                                     // 내장 플러그인은 데이터가 있을 때만 (예: 테마 API의 state.json)
@@ -239,12 +233,12 @@ export default function SettingsPage({ api }: { api: any }) {
                                 })
                                 .map(p => {
                                     const d = dataCountOf(current, p.id)
-                                    const extra = [d.settings && `설정 ${d.settings}`, d.files && `파일 ${d.files}`].filter(Boolean).join(' · ')
+                                    const extra = [d.settings && `${d.settings} settings`, d.files && `${d.files} files`].filter(Boolean).join(' · ')
                                     return (
                                         <TableRow
                                             key={p.id}
-                                            label={`${p.enabled ? '' : '(꺼짐) '}${p.name} ${p.version}`}
-                                            subLabel={`${extra ? `${extra} · ` : ''}${p.internal ? '내장' : p.source?.repo ?? '파일로 설치'}`}
+                                            label={`${p.enabled ? '' : '(off) '}${p.name} ${p.version}`}
+                                            subLabel={`${extra ? `${extra} · ` : ''}${p.internal ? 'Built-in' : p.source?.repo ?? 'From file'}`}
                                             subLabelLineClamp={1}
                                         />
                                     )
@@ -257,19 +251,19 @@ export default function SettingsPage({ api }: { api: any }) {
                     {(TextArea ?? TextInput) && (
                         <>
                             {TextArea ? (
-                                <TextArea label="백업 가져오기" placeholder="복사한 백업(JSON) 또는 백업 파일 URL" value={input} onChange={setInput} size="md" />
+                                <TextArea label="Import" placeholder="Backup JSON or URL" value={input} onChange={setInput} size="md" />
                             ) : (
-                                <TextInput label="백업 가져오기" placeholder="복사한 백업(JSON) 또는 백업 파일 URL" value={input} onChange={setInput} multiline size="md" />
+                                <TextInput label="Import" placeholder="Backup JSON or URL" value={input} onChange={setInput} multiline size="md" />
                             )}
                         </>
                     )}
                     <Stack direction="horizontal" spacing={8}>
                         <View style={{ flex: 1 }}>
-                            <Button text="가져오기" variant="primary" size="md" disabled={!!busy || !input.trim()} onPress={() => importBackup(input)} />
+                            <Button text="Import" variant="primary" size="md" disabled={!!busy || !input.trim()} onPress={() => importBackup(input)} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Button
-                                text="클립보드에서"
+                                text="Paste"
                                 variant="secondary"
                                 size="md"
                                 disabled={!!busy}

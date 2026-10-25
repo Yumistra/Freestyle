@@ -14,7 +14,7 @@ export default plugin({
         try {
             activate()
         } catch (e) {
-            log('error', `로드 실패: ${(e as Error)?.stack ?? e}`)
+            log('error', `Load failed: ${(e as Error)?.stack ?? e}`)
         }
     },
     SettingsComponent: SettingsPage,

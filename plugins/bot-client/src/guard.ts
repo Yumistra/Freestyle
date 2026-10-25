@@ -58,7 +58,7 @@ function startCapture() {
         if (!msg || msg.includes('[BotClient]')) return
         if (level === 'warn' && !INTERESTING.test(msg)) return
         lastCaught = `${level}: ${msg}`
-        log('error', `잡힌 ${lastCaught}`)
+        log('error', `Caught ${lastCaught}`)
     }
     c.error = function (...args: any[]) {
         record('error', args)
@@ -99,7 +99,7 @@ export function bailOut(reason: string, delayMs = 0) {
         ;(globalThis as any).__botClientReady = false
     } catch {}
     stopCapture()
-    if (lastCaught) reason = `${reason} — 직전 오류: ${lastCaught}`
+    if (lastCaught) reason = `${reason} — last error: ${lastCaught}`
     saveSettings({ enabled: false, bootArmed: false })
     recordError(reason)
     setTimeout(() => {
@@ -140,14 +140,14 @@ function checkStall() {
     const s = settings()
     if (done || !s.autoReload || !isBotSession()) return
     if (Date.now() - s.lastAutoReloadAt < RELOAD_COOLDOWN_MS) {
-        log('error', '방금 새로고침했는데도 로딩이 멈춤 — 안전장치에 맡깁니다')
+        log('error', 'Still stuck after reload, leaving it to the guard')
         return
     }
     // 의도한 새로고침이라 실패로 세지 않도록 armed를 풀고 기록해 둔다
     saveSettings({ lastAutoReloadAt: Date.now(), bootArmed: false })
-    log('gateway', '로딩이 멈춰서 앱을 자동으로 다시 불러옵니다')
+    log('gateway', 'Loading stuck, reloading')
     setTimeout(() => {
-        if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 직접 다시 켜주세요')
+        if (!reloadApp()) log('error', 'Reload not found, restart the app')
     }, 500)
 }
 
@@ -167,11 +167,11 @@ export function shouldPatch(): boolean {
         const failCount = s.failCount + 1
         if (failCount >= MAX_FAILS) {
             saveSettings({ failCount })
-            bailOut(`지난 ${failCount}번의 실행이 멈춰서 봇 모드를 껐습니다`, 3000)
+            bailOut(`Bot mode turned off after ${failCount} stuck launches`, 3000)
             return false
         }
         saveSettings({ failCount })
-        recordError(`지난 실행이 정상적으로 뜨지 않았습니다 (${failCount}/${MAX_FAILS})`)
+        recordError(`Last launch didn't finish (${failCount}/${MAX_FAILS})`)
     }
     return true
 }
@@ -189,7 +189,7 @@ function onConnectionOpen() {
     try {
         ;(globalThis as any).__botClientReady = isBotSession()
     } catch {}
-    log('gateway', '정상 연결 확인 — 안전장치 해제')
+    log('gateway', 'Connected, guard cleared')
 }
 
 /** 패치를 건 직후 호출: 이번 부팅을 armed로 기록하고 워치독 시작 */
@@ -205,7 +205,7 @@ export function arm() {
             FluxDispatcher.subscribe('CONNECTION_OPEN', handler)
             unsubscribe = () => FluxDispatcher.unsubscribe('CONNECTION_OPEN', handler)
         } catch (e) {
-            log('error', `CONNECTION_OPEN 구독 실패: ${String(e)}`)
+            log('error', `CONNECTION_OPEN subscribe failed: ${String(e)}`)
         }
     }
 
@@ -216,7 +216,7 @@ export function arm() {
     const ms = settings().readyTimeoutMs + WATCHDOG_EXTRA_MS
     watchdog = setTimeout(() => {
         if (done) return
-        bailOut(`${Math.round(ms / 1000)}초 안에 연결이 완료되지 않아 봇 모드를 끄고 로그아웃했습니다`)
+        bailOut(`Not connected within ${Math.round(ms / 1000)}s, bot mode turned off`)
     }, ms)
 }
 
@@ -244,15 +244,15 @@ function onRunApplication() {
     sawBackground = false
     const s = settings()
     if (!s.autoReload || !s.enabled || !isBotSession()) return
-    log('gateway', '앱을 다시 열어서 새로 불러옵니다 (무한 로딩 방지)')
+    log('gateway', 'App reopened, reloading')
     setTimeout(() => {
-        if (!reloadApp()) log('error', '새로고침 기능을 찾지 못함 — 앱을 강제 종료 후 다시 켜주세요')
+        if (!reloadApp()) log('error', 'Reload not found, force stop and restart the app')
     }, 300)
 }
 
 export function installRelaunchReload(unpatches: Array<() => void>) {
     if (typeof AppRegistry?.runApplication !== 'function' || typeof AppState?.addEventListener !== 'function') {
-        log('error', '앱 재실행 감지 불가 (AppRegistry/AppState 없음)')
+        log('error', 'Cannot detect app restarts (no AppRegistry/AppState)')
         return
     }
 
