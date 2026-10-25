@@ -1,4 +1,5 @@
 import { AlertActionCreators, ToastActionCreators } from '@revenge-mod/discord/actions'
+import { Constants } from '@revenge-mod/discord/common/constants'
 import { Tokens } from '@revenge-mod/discord/common/tokens'
 import { Design } from '@revenge-mod/discord/design'
 import { Stores } from '@revenge-mod/discord/flux'
@@ -113,6 +114,22 @@ function isMine(message: any) {
     return !!me && message?.author?.id === me.id
 }
 
+/** 이 채널에서 남의 메시지를 지울 수 있는지 (메시지 관리 권한. DM 에서는 못 지운다) */
+function canManageMessages(channel: any) {
+    try {
+        if (!channel?.id || channel.isPrivate?.() === true || channel.type === 1 || channel.type === 3) return false
+        const flag = (Constants as any)?.Permissions?.MANAGE_MESSAGES
+        if (flag == null) return false
+        const ps = (Stores as any).PermissionStore
+        if (typeof ps?.can === 'function') return !!ps.can(flag, channel)
+        if (typeof ps?.canWithPartialContext === 'function') return !!ps.canWithPartialContext(flag, { channelId: channel.id })
+    } catch {}
+    return false
+}
+
+/** 버튼·창을 띄울 메시지: 내 메시지, 또는 지울 권한이 있는 남의 메시지 */
+const actionable = (message: any, channel: any) => isMine(message) || canManageMessages(channel)
+
 function previewOf(message: any) {
     const text = String(message?.content ?? '').trim()
     if (text) return text.length > 300 ? `${text.slice(0, 300)}…` : text
@@ -182,7 +199,7 @@ function FallbackPreview({ message, channel }: { message: any; channel: any }) {
 function openActions(handlers: any, message: any, channel: any, chatInputRef?: any, source?: string, extra?: any[]) {
     loadPreview()
     const { AlertModal, AlertActionButton } = D()
-    const editable = editableOf(message)
+    const editable = isMine(message) && editableOf(message)
     AlertActionCreators.openAlert(
         `message-actions-${seq++}`,
         <AlertModal
@@ -285,7 +302,7 @@ const ICON = (name: string) => `design_components_icon_native_redesign_generated
 /** 네이티브가 없거나 메시지 줄을 못 찾으면 null */
 async function showButtons(message: any): Promise<string | null> {
     const buttons: any[] = []
-    if (editableOf(message)) buttons.push({ id: 'edit', label: 'Edit', icon: ICON('pencilicon'), colors: variantColors('secondary') })
+    if (isMine(message) && editableOf(message)) buttons.push({ id: 'edit', label: 'Edit', icon: ICON('pencilicon'), colors: variantColors('secondary') })
     buttons.push({
         id: 'delete',
         label: 'Delete',
@@ -321,7 +338,7 @@ function wrapInstance(inst: any) {
             const data = snowflakeUtils?.getNativeSyntheticEventData?.(event) ?? event?.nativeEvent ?? event
             const result = data?.messageId ? inst.getMessageData?.(data.messageId) : undefined
             const mode = settings().doubleTap
-            if (mode !== 'default' && result?.message && result.messageChannel && isMine(result.message)) {
+            if (mode !== 'default' && result?.message && result.messageChannel && actionable(result.message, result.messageChannel)) {
                 if (mode === 'buttons') inlineActions(inst, result.message, result.messageChannel)
                 else openActions(inst, result.message, result.messageChannel)
                 return
@@ -467,7 +484,7 @@ export default plugin({
                         try {
                             const [message, channel] = args
                             const mode = settings().doubleTap
-                            if (mode !== 'default' && message && channel && isMine(message)) {
+                            if (mode !== 'default' && message && channel && actionable(message, channel)) {
                                 if (mode === 'buttons') inlineActions(undefined, message, channel)
                                 else openActions(undefined, message, channel)
                                 return
