@@ -189,7 +189,14 @@ export function patchServerSwitch(cleanup: (...fns: Array<() => unknown>) => voi
                     beforeJSX(List, (args: any[]) => {
                         try {
                             if (!active('servers')) return args as any
-                            return [GuildSwitch, { __type: args[0], __props: args[1], __kind: path.includes('MessagesFastestList') ? 'dm' : 'guild' }, ...args.slice(2)] as any
+                            const kind = path.includes('MessagesFastestList') ? 'dm' : 'guild'
+                            // 다른 플러그인이 목록 옆에 칸을 붙여 감싸 뒀으면 (Server Folders 옆 칸) 그 칸은 두고 안쪽 목록만 움직인다
+                            const outer = args[0] as any
+                            if (outer?.__innerList && args[1]?.__type) {
+                                const inner = args[1]
+                                return [outer, { ...inner, __type: GuildSwitch, __props: { __type: inner.__type, __props: inner.__props, __kind: kind } }, ...args.slice(2)] as any
+                            }
+                            return [GuildSwitch, { __type: args[0], __props: args[1], __kind: kind }, ...args.slice(2)] as any
                         } catch (e) {
                             report('servers', e)
                             return args as any
