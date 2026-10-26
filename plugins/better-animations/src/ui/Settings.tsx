@@ -466,7 +466,6 @@ function ModuleCard({ id, value, open, onToggle, onChange, enabled }: { id: Modu
                             onCommit={shiftDuration => set({ shiftDuration })}
                         />
                     )}
-                    {id === 'messages' && <SwitchRow label="Bounce" value={value.bounce !== false} onChange={bounce => set({ bounce })} />}
                     {info.test && enabled && <Button text="Test" variant="secondary" size="sm" onPress={info.test} />}
                 </View>
             )}
@@ -596,6 +595,25 @@ export default function SettingsPage({ api }: { api?: any }) {
                         onValueChange={(enabled: boolean) => commit({ ...s, enabled })}
                     />
                 </TableRowGroup>
+
+                <Section title="Scrolling">
+                    <TableRowGroup>
+                        <TableSwitchRow
+                            label="iOS bounce"
+                            subLabel="Lists stretch and spring back at their ends"
+                            value={s.modules.messages.bounce !== false}
+                            onValueChange={(bounce: boolean) => commit({ ...s, modules: { ...s.modules, messages: { ...s.modules.messages, bounce } } })}
+                        />
+                        {s.modules.messages.bounce !== false && (
+                            <TableSwitchRow
+                                label="Everywhere"
+                                subLabel="Every scrolling list, not just the chat"
+                                value={s.modules.messages.bounceAll !== false}
+                                onValueChange={(bounceAll: boolean) => commit({ ...s, modules: { ...s.modules, messages: { ...s.modules.messages, bounceAll } } })}
+                            />
+                        )}
+                    </TableRowGroup>
+                </Section>
 
                 {SECTIONS.map(([title, keys]) => (
                     <Section key={title} title={title}>

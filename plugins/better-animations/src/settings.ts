@@ -17,8 +17,10 @@ export interface ModuleSettings {
     shift?: boolean
     /** 메시지: 밀리는 시간 (ms) */
     shiftDuration?: number
-    /** 채팅 끝에서 iOS 처럼 튕기기 (메시지) */
+    /** 목록 끝에서 iOS 처럼 튕기기 (설정은 messages 에 둔다. 네이티브가 여기서 읽는다) */
     bounce?: boolean
+    /** 튕기기: 채팅뿐 아니라 모든 목록에서 */
+    bounceAll?: boolean
     /** 목록 스크롤: 스크롤할 때뿐 아니라 목록이 처음 나타날 때도 */
     always?: boolean
     /** 화면 전환: 설정 같은 모달 화면에도 */
@@ -58,7 +60,7 @@ export const MODULE_KEYS: ModuleKey[] = [
 export const DEFAULTS: Settings = {
     enabled: true,
     modules: {
-        messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200, bounce: true },
+        messages: { effect: 'rise', duration: 320, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', stagger: 30, onOpen: true, shift: true, shiftDuration: 200, bounce: true, bounceAll: true },
         lists: { effect: 'default', duration: 500, easing: 'out', always: false },
         stack: { effect: 'slip', duration: 280, easing: 'out', exit: 'same', direction: 'auto', position: 'auto', modals: true },
         push: { effect: 'default', duration: 300, easing: 'out' },

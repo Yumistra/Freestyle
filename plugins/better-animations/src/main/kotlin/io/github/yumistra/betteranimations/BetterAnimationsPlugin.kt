@@ -79,8 +79,10 @@ private data class Config(
     val onOpen: Boolean = true,
     val shift: Boolean = true,
     val shiftDuration: Long = 200L,
-    /** 채팅 끝에서 iOS 처럼 튕기기 */
+    /** 목록 끝에서 iOS 처럼 튕기기 */
     val bounce: Boolean = true,
+    /** 채팅뿐 아니라 모든 목록에서 */
+    val bounceAll: Boolean = true,
 ) {
     val enterOn get() = enabled && (Cask.styleOf(effect) != null || hiddenFor(effect) != null)
     val exitEffect get() = if (exit.isEmpty() || exit == "same") effect else exit
@@ -108,6 +110,7 @@ private fun loadConfig(dir: File): Config {
             shift = m.optBoolean("shift", d.shift),
             shiftDuration = m.optLong("shiftDuration", d.shiftDuration).coerceIn(50L, 2000L),
             bounce = m.optBoolean("bounce", d.bounce),
+            bounceAll = m.optBoolean("bounceAll", d.bounceAll),
         )
     } catch (e: Throwable) {
         return d
@@ -892,33 +895,63 @@ val betterAnimationsPlugin = plugin {
                 )
             }
         }
-        // 채팅 끝에서 iOS 처럼 튕기기
-        val bounce = if (recycler != null && chatListView != null) Bounce(recycler) { config.get().let { it.enabled && it.bounce } } else null
+        // 목록 끝에서 iOS 처럼 튕기기 (채팅, 설정에 따라 모든 목록)
+        val bounceOn = { list: View -> config.get().let { it.enabled && it.bounce && (it.bounceAll || chat(list) != null) } }
+        val bounce = Bounce(recycler, bounceOn)
         bounceRef = bounce
-        if (bounce != null && bounce.supported) {
-            val rvClass = recycler!!.rv
-            val touch = object : XC_MethodHook() {
+        if (bounce.supported) {
+            fun touchHook(frame: Boolean) = object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    val list = chat(param.thisObject) ?: return
+                    val list = param.thisObject as? ViewGroup ?: return
+                    if (frame) bounce.enter(list)
                     val ev = param.args[0] as? android.view.MotionEvent ?: return
                     try {
+                        if (!bounceOn(list)) return
                         bounce.register(list)
                         val shift = bounce.before(list, ev)
-                        if (shift != 0f) param.setObjectExtra("baShift", shift)
+                        if (shift != 0f) {
+                            param.setObjectExtra("baShift", shift)
+                            param.setObjectExtra("baHorizontal", bounce.horizontal(list))
+                        }
                     } catch (e: Throwable) {
                         log.e("Bounce touch failed", e)
                     }
                 }
 
                 override fun afterHookedMethod(param: MethodHookParam) {
+                    if (frame) (param.thisObject as? View)?.let { bounce.exit(it) }
                     val shift = param.getObjectExtra("baShift") as? Float ?: return
                     val ev = param.args[0] as? android.view.MotionEvent ?: return
-                    bounce.restore(ev, shift)
+                    bounce.restore(ev, shift, param.getObjectExtra("baHorizontal") == true)
                 }
             }
-            tryHook("onInterceptTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onInterceptTouchEvent", android.view.MotionEvent::class.java, touch) }
-            tryHook("onTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onTouchEvent", android.view.MotionEvent::class.java, touch) }
-            // 채팅 목록의 늘어나는 효과는 끄고, 끝에 부딪힌 속도로 튕긴다
+            /** ScrollView 가 EdgeEffect 를 쓰는 동안만 "지금 이 목록" 표시 */
+            val frameHook = object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    (param.thisObject as? View)?.let { bounce.enter(it) }
+                }
+
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    (param.thisObject as? View)?.let { bounce.exit(it) }
+                }
+            }
+            val motion = android.view.MotionEvent::class.java
+            if (recycler != null) {
+                val rvClass = recycler.rv
+                val touch = touchHook(false)
+                tryHook("onInterceptTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onInterceptTouchEvent", motion, touch) }
+                tryHook("onTouchEvent") { XposedHelpers.findAndHookMethod(rvClass, "onTouchEvent", motion, touch) }
+            }
+            // React Native 의 스크롤 목록 (ReactScrollView·ReactHorizontalScrollView 가 이걸 물려받는다)
+            for (cls in listOf(android.widget.ScrollView::class.java, android.widget.HorizontalScrollView::class.java)) {
+                val n = cls.simpleName
+                val touch = touchHook(true)
+                tryHook("$n.onInterceptTouchEvent") { XposedHelpers.findAndHookMethod(cls, "onInterceptTouchEvent", motion, touch) }
+                tryHook("$n.onTouchEvent") { XposedHelpers.findAndHookMethod(cls, "onTouchEvent", motion, touch) }
+                tryHook("$n.computeScroll") { XposedHelpers.findAndHookMethod(cls, "computeScroll", frameHook) }
+                tryHook("$n.draw") { XposedHelpers.findAndHookMethod(cls, "draw", android.graphics.Canvas::class.java, frameHook) }
+            }
+            // 튕기는 목록의 늘어나는·빛나는 효과는 끄고, 끝에 부딪힌 속도로 튕긴다
             val edge = android.widget.EdgeEffect::class.java
             fun owner(param: XC_MethodHook.MethodHookParam): View? {
                 if (!config.get().let { it.enabled && it.bounce }) return null
