@@ -1,13 +1,37 @@
 package io.github.yumistra.betteranimations
 
+import android.animation.TimeInterpolator
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Path
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.Shader
+import android.os.Build
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.util.WeakHashMap
+
+/**
+ * 메시지 줄 효과 중 View 속성으로 읽을 수 없는 것 (원형 펼치기, 흐림)을 장식 그리기에 알려 주는 곳.
+ * 또 효과가 도는 동안 목록을 매 프레임 다시 그리게 한다: 줄 속성(이동·투명도)만 바뀌면 안드로이드는
+ * 목록을 다시 그리지 않아서, 목록 캔버스에 그리는 장식(멘션 배경)은 옛 자리에 머문다.
+ */
+internal object RowFx {
+    class Reveal(val cx: Float, val cy: Float, val radius: Float, val startAt: Long, val duration: Long, val interpolator: TimeInterpolator)
+
+    val reveal = WeakHashMap<View, Reveal>()
+    val blur = WeakHashMap<View, Float>()
+
+    fun redraw(child: View) {
+        (child.parent as? View)?.invalidate()
+    }
+}
 
 /**
  * 멘션(핑) 노란 배경 같은 "메시지 뒤 배경"이 메시지 효과를 그대로 따라가게 한다.
@@ -18,7 +42,7 @@ import java.lang.reflect.Modifier
  * 효과가 끝나면 맞아떨어진다.
  *
  * 채팅 목록에 붙은 ItemDecoration 들을 찾아, 그 안에서 "(Canvas, View) 로 줄 하나를 그리는" 메서드를 감싼다.
- * 그리는 동안만 캔버스에 그 줄의 변환(View.getMatrix)과 투명도를 걸어 준다.
+ * 그리는 동안만 캔버스에 그 줄의 변환(View.getMatrix)·투명도·원형 펼치기(잘라내기)·흐림을 걸어 준다.
  */
 internal class Highlights(private val rvClass: Class<*>, private val log: (String, Throwable?) -> Unit) {
     private val done = HashSet<Class<*>>()
@@ -100,13 +124,37 @@ internal class Highlights(private val rvClass: Class<*>, private val log: (Strin
                         override fun beforeHookedMethod(param: MethodHookParam) {
                             val canvas = param.args[0] as? Canvas ?: return
                             val view = param.args[1] as? View ?: return
-                            val save = apply(canvas, view)
-                            if (save >= 0) param.setObjectExtra("baSave", save)
+                            try {
+                                val save = apply(canvas, view)
+                                if (save < 0) return
+                                param.setObjectExtra("baSave", save)
+                                // 흐림: 도우미가 그리는 걸 따로 받아서 같은 세기로 흐리게 해 붙인다
+                                val radius = RowFx.blur[view] ?: 0f
+                                if (radius >= 0.5f && Build.VERSION.SDK_INT >= 31 && canvas.isHardwareAccelerated) {
+                                    val node = nodes.getOrPut(view) { RenderNode("ba-highlight") }
+                                    node.setPosition(0, 0, canvas.width.coerceAtLeast(1), canvas.height.coerceAtLeast(1))
+                                    node.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.DECAL))
+                                    param.setObjectExtra("baNode", node)
+                                    param.args[0] = node.beginRecording()
+                                    param.setObjectExtra("baCanvas", canvas)
+                                }
+                            } catch (e: Throwable) {
+                                log("Highlight transform failed", e)
+                            }
                         }
 
                         override fun afterHookedMethod(param: MethodHookParam) {
                             val save = param.getObjectExtra("baSave") as? Int ?: return
-                            (param.args[0] as? Canvas)?.restoreToCount(save)
+                            val canvas = (param.getObjectExtra("baCanvas") as? Canvas) ?: (param.args[0] as? Canvas) ?: return
+                            (param.getObjectExtra("baNode") as? RenderNode)?.let { node ->
+                                try {
+                                    node.endRecording()
+                                    canvas.drawRenderNode(node)
+                                } catch (e: Throwable) {
+                                }
+                                param.args[0] = canvas
+                            }
+                            canvas.restoreToCount(save)
                         }
                     },
                 ),
@@ -125,7 +173,9 @@ internal class Highlights(private val rvClass: Class<*>, private val log: (Strin
     private fun apply(canvas: Canvas, v: View): Int {
         val transformed = v.scaleX != 1f || v.scaleY != 1f || v.rotation != 0f || v.rotationX != 0f || v.rotationY != 0f
         val faded = v.alpha < 1f
-        if (!transformed && !faded) return -1
+        val reveal = RowFx.reveal[v]
+        val blurred = (RowFx.blur[v] ?: 0f) >= 0.5f
+        if (!transformed && !faded && reveal == null && !blurred) return -1
         val save = canvas.save()
         if (transformed) {
             tmp.set(v.matrix)
@@ -133,11 +183,27 @@ internal class Highlights(private val rvClass: Class<*>, private val log: (Strin
             canvas.concat(tmp)
             canvas.translate(-v.left - v.translationX, -v.top - v.translationY)
         }
+        val l = v.left + v.translationX
+        val t = v.top + v.translationY
+        if (reveal != null) {
+            // 줄이 원형으로 펼쳐지는 것과 같은 원으로 잘라 그린다 (같은 시작 시각·길이·곡선으로 계산)
+            val elapsed = SystemClock.uptimeMillis() - reveal.startAt
+            val f = if (reveal.duration <= 0) 1f else (elapsed.toFloat() / reveal.duration).coerceIn(0f, 1f)
+            if (f >= 1f) {
+                RowFx.reveal.remove(v)
+            } else {
+                val r = (reveal.radius * reveal.interpolator.getInterpolation(f)).coerceAtLeast(0f)
+                path.reset()
+                path.addCircle(l + reveal.cx, t + reveal.cy, r, Path.Direction.CW)
+                canvas.clipPath(path)
+            }
+        }
         if (faded) {
-            val l = v.left + v.translationX
-            val t = v.top + v.translationY
             canvas.saveLayerAlpha(l, t, l + v.width, t + v.height, (v.alpha.coerceIn(0f, 1f) * 255).toInt())
         }
         return save
     }
+
+    private val path = Path()
+    private val nodes = WeakHashMap<View, RenderNode>()
 }

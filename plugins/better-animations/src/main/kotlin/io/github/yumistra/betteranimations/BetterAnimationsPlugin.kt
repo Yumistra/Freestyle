@@ -317,10 +317,12 @@ private object Blur {
         }
         view.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
         applied[view] = true
+        RowFx.blur[view] = radius
     }
 
     fun clear(view: View) {
         if (!supported) return
+        RowFx.blur.remove(view)
         if (applied.remove(view) != null) view.setRenderEffect(null)
     }
 
@@ -508,11 +510,13 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
             reveal.interpolator = interpolator
             reveals[child] = reveal
             reveal.start()
+            RowFx.reveal[child] = RowFx.Reveal(cx.toFloat(), cy.toFloat(), radius, SystemClock.uptimeMillis() + delay, c.duration, interpolator)
         }
     }
 
     /** p: 곡선을 거친 진행도(튕길 수 있음), f: 시간 비율 */
     private fun frame(child: View, m: Moves, p: Float, f: Float, started: Boolean) {
+        RowFx.redraw(child)
         val q = 1f - p
         child.alpha = when {
             m.reveal -> if (started) 1f else 0f
@@ -612,7 +616,10 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         val animator = ValueAnimator.ofFloat(0f, 1f)
         animator.duration = c.shiftDuration
         animator.interpolator = SMOOTH
-        animator.addUpdateListener { a -> child.translationY = from * (1f - (a.animatedValue as Float)) }
+        animator.addUpdateListener { a ->
+            child.translationY = from * (1f - (a.animatedValue as Float))
+            RowFx.redraw(child)
+        }
         animator.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (shifting[child] === animation) {
@@ -713,6 +720,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
         child.rotationX = 0f
         child.rotationY = 0f
         Blur.clear(child)
+        RowFx.reveal.remove(child)
         Cask.clear(child)
         if (Build.VERSION.SDK_INT >= 28 && child.isPivotSet) child.resetPivot()
     }

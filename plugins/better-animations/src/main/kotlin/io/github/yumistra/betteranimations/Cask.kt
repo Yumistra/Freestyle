@@ -155,7 +155,10 @@ internal object Cask {
             }
             else -> update = { _ -> }
         }
-        a.addUpdateListener { update(it.animatedValue as Float) }
+        a.addUpdateListener {
+            update(it.animatedValue as Float)
+            RowFx.redraw(view)
+        }
         a.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) = onEnd()
         })
