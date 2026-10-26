@@ -8,6 +8,7 @@ Plugins for Revenge Next.
 | Message Actions | `yumistra.message-actions` |
 | Overlay Background | `yumistra.overlay-background` |
 | Plugin Backup | `yumistra.plugin-backup` |
+| Server Folders | `yumistra.server-folders` |
 | Silent Leave | `yumistra.silent-leave` |
 | Toast Fix | `yumistra.toast-fix` |
 

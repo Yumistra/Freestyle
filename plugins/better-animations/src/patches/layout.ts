@@ -8,7 +8,7 @@ import { Animated, Dimensions, Easing, LayoutAnimation } from 'react-native'
 import { applyMove, decodeEasing, easingFrom, effectOf, exitPoseOf, isCustomEasing, springFor, zetaOf, type Normalized } from '../effects'
 import { partsFor } from '../interpolate'
 import { nativeGuildOut } from '../native'
-import { hideCollapsing, markExpanded } from './channels'
+import { hideCollapsing, markExpanded, restoreCollapsed } from './channels'
 import { active, report, status, type ModuleSettings } from '../settings'
 
 /**
@@ -286,7 +286,14 @@ export function patchLayout() {
                     } catch (e) {
                         report('layout', e)
                     }
-                    resolve(orig.apply(self, args))
+                    const out = orig.apply(self, args)
+                    try {
+                        const m = active('channelList')
+                        if (m) restoreCollapsed(m)
+                    } catch (e) {
+                        report('layout', e)
+                    }
+                    resolve(out)
                 }, wait)
             })
         }

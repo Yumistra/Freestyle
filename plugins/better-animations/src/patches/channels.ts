@@ -22,6 +22,8 @@ interface Row {
     parent: string | null
     stays(): boolean
     hide(m: ModuleSettings): void
+    show(m: ModuleSettings): void
+    hidden: boolean
 }
 
 const rows = new Set<Row>()
@@ -44,6 +46,20 @@ export function hideCollapsing(categoryId: string | undefined, m: ModuleSettings
     return n ? Math.min(600, Math.round(m.duration * 0.8)) : 0
 }
 
+/**
+ * 접은 뒤에도 목록에 남은 줄은 다시 보이게 한다.
+ * 디스코드는 선택한 채널·안 읽은 채널·들어가 있는 음성 채널 등을 접어도 남겨 두는데,
+ * 우리가 미리 알아채지 못한 줄이 투명한 채로 굳지 않게 하는 안전장치.
+ */
+export function restoreCollapsed(m: ModuleSettings) {
+    const check = () => {
+        for (const row of rows) if (row.hidden) row.show(m)
+    }
+    // 디스코드가 줄을 지우는 건 액션 뒤 다음 화면 갱신이라, 조금 기다린 뒤 남은 줄만
+    setTimeout(check, 160)
+    setTimeout(check, 600)
+}
+
 function justExpanded(parent: string | null) {
     if (!parent) return false
     const t = Math.max(expandedAt.get(parent) ?? 0, expandedAt.get(ALL) ?? 0)
@@ -54,6 +70,9 @@ function staysVisible(id: string, guildId: string | undefined, selected: boolean
     if (selected) return true
     try {
         const s: any = Stores
+        // 렌더 때 받은 값은 오래됐을 수 있어서 지금 선택된 채널을 다시 본다
+        if (s.SelectedChannelStore?.getChannelId?.() === id) return true
+        if (s.SelectedChannelStore?.getVoiceChannelId?.() === id) return true
         const unread = s.ReadStateStore?.hasUnread?.(id)
         const muted = guildId ? s.UserGuildSettingsStore?.isChannelMuted?.(guildId, id) : false
         return !!unread && !muted
@@ -73,13 +92,23 @@ function run(value: Animated.Value, to: number, m: ModuleSettings, delay = 0) {
 function ChannelRow({ id, parent, guildId, selected, index, children }: { id: string; parent: string | null; guildId?: string; selected: boolean; index: number; children: any }) {
     const [state] = useState(() => {
         const enter = !!active('channelList') && justExpanded(parent)
-        return { enter, value: new Animated.Value(enter ? 0 : 1) }
+        return { enter, value: new Animated.Value(enter ? 0 : 1), selected }
     })
+    // 처음 그려진 뒤에 선택돼도 접을 때 알 수 있게 매번 최신 값으로
+    state.selected = selected
     useEffect(() => {
         const row: Row = {
             parent,
-            stays: () => staysVisible(id, guildId, selected),
-            hide: m => run(state.value, 0, m),
+            hidden: false,
+            stays: () => staysVisible(id, guildId, state.selected),
+            hide: m => {
+                row.hidden = true
+                run(state.value, 0, m)
+            },
+            show: m => {
+                row.hidden = false
+                run(state.value, 1, m)
+            },
         }
         rows.add(row)
         const m = active('channelList')
