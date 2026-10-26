@@ -724,6 +724,7 @@ private class Rows(private val config: () -> Config, private val holderOf: (View
 val betterAnimationsPlugin = plugin {
     var unhooks = emptyList<XC_MethodHook.Unhook>()
     var bounceRef: Bounce? = null
+    var highlightsRef: Highlights? = null
 
     start {
         // 무엇이 되고 안 되는지 JS 의 Status 에 보여 주려고 가장 먼저 단다 (아래가 실패해도 ping 은 된다)
@@ -789,6 +790,9 @@ val betterAnimationsPlugin = plugin {
             }
         }
 
+        val highlights = recycler?.let { r -> Highlights(r.rv) { msg, e -> if (e != null) log.e(msg, e) else log.i(msg) } }
+        highlightsRef = highlights
+        val highlightScans = WeakHashMap<ViewGroup, Int>()
         if (recycler != null) {
             val rvClass = recycler.rv
             // 줄이 붙고 떨어지는 건 ViewGroup 의 OnHierarchyChangeListener 로 듣는다.
@@ -876,6 +880,16 @@ val betterAnimationsPlugin = plugin {
                             }
                             val parent = chat(list) ?: return
                             bounceRef?.register(parent)
+                            // 멘션 배경 같은 목록 장식이 메시지 효과를 따라가게 (장식은 처음 몇 번의 배치 안에 붙는다)
+                            val n = highlightScans[parent] ?: 0
+                            if (n < 3) {
+                                highlightScans[parent] = n + 1
+                                try {
+                                    highlights?.scan(parent)
+                                } catch (e: Throwable) {
+                                    log.e("Failed to find chat decorations", e)
+                                }
+                            }
                             try {
                                 rows.beforeLayout(parent)
                             } catch (e: Throwable) {
@@ -1080,6 +1094,8 @@ val betterAnimationsPlugin = plugin {
         } catch (e: Throwable) {
         }
         bounceRef = null
+        highlightsRef?.hooks?.forEach { it.unhook() }
+        highlightsRef = null
         for (unhook in unhooks) unhook.unhook()
         unhooks = emptyList()
     }
